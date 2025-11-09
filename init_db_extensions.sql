@@ -6,10 +6,10 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Enable PostGIS for geospatial features (required for location tracking)
-CREATE EXTENSION IF NOT EXISTS postgis;
+-- CREATE EXTENSION IF NOT EXISTS postgis;  -- Not available on this server
 
 -- Enable pg_trgm for fuzzy text matching (required for search features)
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- Optional for now
 
 -- Verify extensions are installed
 SELECT
