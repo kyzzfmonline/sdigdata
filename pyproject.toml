@@ -3,7 +3,6 @@ name = "sdigdata"
 version = "1.0.0"
 description = "SDIGdata Backend - FastAPI + PostgreSQL + DigitalOcean Spaces (MetroForm for Metropolitan Assemblies)"
 requires-python = ">=3.12"
-readme = "README.md"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",

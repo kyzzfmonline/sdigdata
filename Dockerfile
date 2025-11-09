@@ -11,11 +11,14 @@ RUN pip install uv
 # Set working directory
 WORKDIR /app
 
-# Copy all files (we need the full project structure for hatchling)
-COPY . .
+# Copy dependency files first for better caching
+COPY pyproject.toml ./
 
-# Install dependencies with dev dependencies for testing
-RUN uv sync
+# Install dependencies (without dev for production)
+RUN uv sync --no-dev
+
+# Copy the rest of the application
+COPY . .
 
 # Expose port
 EXPOSE 8000
