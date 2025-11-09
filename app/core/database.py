@@ -29,6 +29,7 @@ async def init_db_pool(settings: Settings):
     global _pool
     _pool = await asyncpg.create_pool(
         dsn=settings.DATABASE_URL,
+        ssl=False,  # Disable SSL for external connections
         min_size=10,  # Minimum number of connections in pool
         max_size=50,  # Maximum number of connections in pool
         max_queries=50000,  # Maximum queries per connection before recycling
@@ -36,7 +37,9 @@ async def init_db_pool(settings: Settings):
         timeout=30,  # Connection timeout in seconds
         command_timeout=60,  # Query timeout in seconds
     )
-    print(f"✅ Database pool initialized: {_pool.get_size()} / {_pool.get_max_size()} connections")
+    print(
+        f"✅ Database pool initialized: {_pool.get_size()} / {_pool.get_max_size()} connections"
+    )
 
 
 async def close_db_pool():
