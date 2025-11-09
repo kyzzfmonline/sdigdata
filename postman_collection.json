@@ -1,0 +1,1020 @@
+{
+	"info": {
+		"_postman_id": "sdigdata-api-collection",
+		"name": "SDIGdata Backend API",
+		"description": "Complete API collection for SDIGdata Backend - AI-Ready Data Collection System for Metropolitan Assemblies",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "admin_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "organization_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "form_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "agent_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "response_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Bootstrap Admin (First Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('admin_id', response.id);",
+									"    pm.collectionVariables.set('organization_id', response.organization_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/bootstrap-admin",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"bootstrap-admin"
+							]
+						},
+						"description": "Create the first admin user. This only works when NO admin users exist in the system."
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('access_token', response.access_token);",
+									"    pm.collectionVariables.set('admin_id', response.user.id);",
+									"    pm.collectionVariables.set('organization_id', response.user.organization_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticate and get JWT token"
+					},
+					"response": []
+				},
+				{
+					"name": "Register Agent (Admin Only)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('agent_id', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"agent1\",\n  \"password\": \"AgentPass123!\",\n  \"role\": \"agent\",\n  \"organization_id\": \"{{organization_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						},
+						"description": "Register a new agent (requires admin authentication)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Organizations",
+			"item": [
+				{
+					"name": "Create Organization",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('organization_id', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Kumasi Metropolitan Assembly\",\n  \"logo_url\": \"https://example.com/logo.png\",\n  \"primary_color\": \"#1976d2\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/organizations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"organizations"
+							]
+						},
+						"description": "Create a new organization (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "List Organizations",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/organizations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"organizations"
+							]
+						},
+						"description": "List all organizations"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Organization by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/organizations/{{organization_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"organizations",
+								"{{organization_id}}"
+							]
+						},
+						"description": "Get a specific organization by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Organization",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Kumasi Metro Assembly (Updated)\",\n  \"primary_color\": \"#2196f3\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/organizations/{{organization_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"organizations",
+								"{{organization_id}}"
+							]
+						},
+						"description": "Update organization details (admin only)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Forms",
+			"item": [
+				{
+					"name": "Create Form",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('form_id', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Household Survey 2025\",\n  \"organization_id\": \"{{organization_id}}\",\n  \"form_schema\": {\n    \"fields\": [\n      {\n        \"id\": \"household_name\",\n        \"label\": \"Household Name\",\n        \"type\": \"text\",\n        \"required\": true\n      },\n      {\n        \"id\": \"members\",\n        \"label\": \"Number of Members\",\n        \"type\": \"number\",\n        \"required\": true\n      },\n      {\n        \"id\": \"location\",\n        \"label\": \"GPS Location\",\n        \"type\": \"gps\",\n        \"required\": true\n      }\n    ]\n  },\n  \"status\": \"published\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/forms",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"forms"
+							]
+						},
+						"description": "Create a new form"
+					},
+					"response": []
+				},
+				{
+					"name": "List Forms",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/forms",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"forms"
+							]
+						},
+						"description": "List all forms"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Form by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/forms/{{form_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"forms",
+								"{{form_id}}"
+							]
+						},
+						"description": "Get a specific form by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Form to Agent",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agent_id\": \"{{agent_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/forms/{{form_id}}/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"forms",
+								"{{form_id}}",
+								"assign"
+							]
+						},
+						"description": "Assign a form to an agent (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Assigned Agents",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/forms/{{form_id}}/agents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"forms",
+								"{{form_id}}",
+								"agents"
+							]
+						},
+						"description": "Get agents assigned to a form"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Form Responses (CSV)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/forms/{{form_id}}/export",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"forms",
+								"{{form_id}}",
+								"export"
+							]
+						},
+						"description": "Export form responses as CSV (admin only)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Responses",
+			"item": [
+				{
+					"name": "Submit Response",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('response_id', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"form_id\": \"{{form_id}}\",\n  \"data\": {\n    \"household_name\": \"Smith Family\",\n    \"members\": 5,\n    \"location\": {\n      \"latitude\": 6.6885,\n      \"longitude\": -1.6244,\n      \"accuracy\": 10\n    }\n  },\n  \"attachments\": {\n    \"photo1\": \"https://example.com/photo1.jpg\",\n    \"photo2\": \"https://example.com/photo2.jpg\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/responses",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"responses"
+							]
+						},
+						"description": "Submit a form response with automatic quality scoring"
+					},
+					"response": []
+				},
+				{
+					"name": "List Responses",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/responses?form_id={{form_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"responses"
+							],
+							"query": [
+								{
+									"key": "form_id",
+									"value": "{{form_id}}"
+								}
+							]
+						},
+						"description": "List responses (optionally filtered by form_id)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Response by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/responses/{{response_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"responses",
+								"{{response_id}}"
+							]
+						},
+						"description": "Get a specific response by ID"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Files",
+			"item": [
+				{
+					"name": "Get Presigned Upload URL",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"filename\": \"household_photo.jpg\",\n  \"content_type\": \"image/jpeg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/files/presign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"files",
+								"presign"
+							]
+						},
+						"description": "Get a presigned URL for direct file upload to S3/MinIO"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "ML & AI",
+			"item": [
+				{
+					"name": "Get Training Data",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ml/training-data?min_quality=0.6&suitable_only=true&limit=100",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ml",
+								"training-data"
+							],
+							"query": [
+								{
+									"key": "min_quality",
+									"value": "0.6",
+									"description": "Minimum quality score (0.0-1.0)"
+								},
+								{
+									"key": "suitable_only",
+									"value": "true",
+									"description": "Only return responses suitable for training"
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Maximum number of records"
+								},
+								{
+									"key": "form_id",
+									"value": "{{form_id}}",
+									"description": "Filter by form ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get high-quality responses suitable for ML training (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Spatial Data (GeoJSON)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ml/spatial-data?format=geojson&min_quality=0.5",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ml",
+								"spatial-data"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "geojson",
+									"description": "Output format: geojson or json"
+								},
+								{
+									"key": "min_quality",
+									"value": "0.5",
+									"description": "Minimum quality score"
+								},
+								{
+									"key": "form_id",
+									"value": "{{form_id}}",
+									"description": "Filter by form ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Export spatial data in GeoJSON format for geospatial ML (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Quality Statistics",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ml/quality-stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ml",
+								"quality-stats"
+							],
+							"query": [
+								{
+									"key": "form_id",
+									"value": "{{form_id}}",
+									"description": "Filter by form ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get data quality statistics for ML planning (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "List ML Datasets",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ml/datasets",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ml",
+								"datasets"
+							]
+						},
+						"description": "List available ML datasets from the data catalog (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Temporal Trends",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ml/temporal-trends?days=30",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ml",
+								"temporal-trends"
+							],
+							"query": [
+								{
+									"key": "days",
+									"value": "30",
+									"description": "Number of days of historical data (max 365)"
+								},
+								{
+									"key": "form_id",
+									"value": "{{form_id}}",
+									"description": "Filter by form ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get temporal trends for time-series ML analysis (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Export for ML (JSON)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ml/bulk-export?form_id={{form_id}}&format=json&min_quality=0.6&include_metadata=true",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ml",
+								"bulk-export"
+							],
+							"query": [
+								{
+									"key": "form_id",
+									"value": "{{form_id}}",
+									"description": "Form ID to export (required)"
+								},
+								{
+									"key": "format",
+									"value": "json",
+									"description": "Output format: json or jsonl"
+								},
+								{
+									"key": "min_quality",
+									"value": "0.6",
+									"description": "Minimum quality score"
+								},
+								{
+									"key": "include_metadata",
+									"value": "true",
+									"description": "Include quality scores and metadata"
+								}
+							]
+						},
+						"description": "Bulk export responses for ML pipelines (admin only)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health & Info",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Health check endpoint for monitoring"
+					},
+					"response": []
+				},
+				{
+					"name": "API Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Get API information and status"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
