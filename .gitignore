@@ -34,6 +34,11 @@ uv.lock
 .env
 .env.local
 
+# Keep template env files for reference
+!.env.dev
+!.env.prod
+!.env.example
+
 # IDE
 .vscode/
 .idea/
@@ -52,4 +57,7 @@ uv.lock
 .DS_Store
 Thumbs.db
 
-*.md
+# Documentation - keep important docs
+!ENVIRONMENT_SETUP.md
+!docs/**/*.md
+!README.md
