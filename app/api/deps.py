@@ -103,36 +103,36 @@ async def require_any_permission_dep(
 
 
 # Convenience functions for common permissions
-def require_users_admin(
+async def require_users_admin(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ):
-    return require_permission_dep("users", "admin", current_user, conn)
+    return await require_permission_dep("users", "admin", current_user, conn)
 
 
-def require_users_read(
+async def require_users_read(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ):
-    return require_permission_dep("users", "read", current_user, conn)
+    return await require_permission_dep("users", "read", current_user, conn)
 
 
-def require_forms_admin(
+async def require_forms_admin(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ):
-    return require_permission_dep("forms", "admin", current_user, conn)
+    return await require_permission_dep("forms", "admin", current_user, conn)
 
 
-def require_responses_admin(
+async def require_responses_admin(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ):
-    return require_permission_dep("responses", "admin", current_user, conn)
+    return await require_permission_dep("responses", "admin", current_user, conn)
 
 
-def require_system_admin(
+async def require_system_admin(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ):
-    return require_permission_dep("system", "admin", current_user, conn)
+    return await require_permission_dep("system", "admin", current_user, conn)
