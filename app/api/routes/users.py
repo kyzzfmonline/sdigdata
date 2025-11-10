@@ -30,6 +30,7 @@ from app.services.users import (
 from app.services.permissions import PermissionChecker
 from app.api.deps import (
     get_current_user,
+    get_current_user_with_password,
     require_admin,
     require_users_read,
     require_users_admin,
@@ -266,7 +267,7 @@ async def update_current_user_profile(
 async def change_password(
     request: PasswordChangeRequest,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict, Depends(get_current_user_with_password)],
 ):
     """
     Change current user's password.
@@ -281,7 +282,7 @@ async def change_password(
     """
     # Verify current password
     if not verify_password(request.current_password, current_user["password_hash"]):
-        error_response("Current password is incorrect")
+        raise error_response("Current password is incorrect")
 
     # Hash new password
     new_password_hash = hash_password(request.new_password)
@@ -294,7 +295,7 @@ async def change_password(
     )
 
     if not success:
-        error_response(
+        raise error_response(
             "Failed to update password",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

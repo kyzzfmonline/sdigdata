@@ -23,8 +23,60 @@ Authorization: Bearer <JWT_TOKEN>
 | GET | `/auth/verify` | ✅ | Verify token validity |
 | POST | `/auth/register` | ✅ Admin | Register new user |
 | POST | `/auth/bootstrap-admin` | ❌ | Create first admin (one-time only) |
-| POST | `/auth/password-reset` | ❌ | Request password reset email |
-| POST | `/auth/password-reset/confirm` | ❌ | Confirm password reset with token |
+| POST | `/auth/password-reset` | ❌ | Request password reset email (placeholder - email service not configured) |
+| POST | `/auth/password-reset/confirm` | ❌ | Confirm password reset with token (placeholder - email service not configured) |
+| POST | `/users/me/password` | ✅ | Change password (logged-in users only) |
+
+---
+
+## 🔑 Password Management
+
+### Change Password (Logged-in Users)
+**Endpoint:** `POST /users/me/password`  
+**Auth:** Required (Bearer token)
+
+**Request:**
+```json
+{
+  "current_password": "CurrentPass123!",
+  "new_password": "NewSecurePass456!"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password changed successfully"
+}
+```
+
+**Password Requirements:**
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- At least one special character (!@#$%^&*)
+
+**Security Features:**
+- ✅ Current password verification required
+- ✅ Password strength validation
+- ✅ Secure password hashing (Argon2)
+- ✅ Audit logging
+- ✅ Automatic logout of other sessions (token invalidation)
+
+**Example:**
+```bash
+curl -X POST http://localhost:8000/users/me/password \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "current_password": "OldPass123!",
+    "new_password": "NewSecurePass456!"
+  }'
+```
+
+**Note:** Password reset via email is not currently implemented. Users must be logged in to change their password.
 
 ---
 

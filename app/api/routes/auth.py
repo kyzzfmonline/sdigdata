@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, Field, field_validator
 import asyncpg
+import asyncio
 
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token
@@ -17,9 +18,16 @@ from app.services.users import (
     get_user_by_username,
     get_user_by_id,
     update_user_last_login,
+    get_user_by_email,
+    create_password_reset_token,
+    get_password_reset_token,
+    mark_token_used,
+    update_user_password,
+    cleanup_expired_tokens,
 )
 from app.services.organizations import get_first_organization
 from app.services.permissions import PermissionChecker
+from app.services.email import email_service
 from app.api.deps import require_admin, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -644,10 +652,15 @@ async def request_password_reset(
     """
     Request password reset (sends reset email).
 
-    Note: This is a placeholder implementation. In production, this should:
-    1. Generate a secure reset token
-    2. Store it in the database with expiration
-    3. Send email with reset link
+    This endpoint generates a secure reset token, stores it in the database,
+    and sends a password reset email to the user.
+
+    **Security Features:**
+    - Secure token generation using cryptographically secure random bytes
+    - Token hashing for database storage
+    - Token expiration (24 hours by default)
+    - User enumeration protection (always returns success)
+    - Automatic cleanup of expired tokens
 
     **Request Body:**
     ```json
@@ -666,11 +679,61 @@ async def request_password_reset(
     """
     logger.info(f"Password reset requested for email: {request.email}")
 
-    # For security, always return success even if email doesn't exist
-    # This prevents user enumeration attacks
-    return success_response(
-        message="If an account exists with that email, a password reset link has been sent."
-    )
+    try:
+        # Get user by email
+        user = await get_user_by_email(conn, request.email)
+
+        if user:
+            # Generate secure token
+            reset_token = email_service.generate_reset_token()
+            token_hash = email_service.hash_token(reset_token)
+            expires_at = email_service.get_token_expiry()
+
+            # Create token in database
+            token_record = await create_password_reset_token(
+                conn,
+                user_id=user["id"]
+                if isinstance(user["id"], UUID)
+                else UUID(user["id"]),
+                email=request.email,
+                token_hash=token_hash,
+                expires_at=expires_at,
+            )
+
+            if token_record:
+                # Send email asynchronously (don't wait for it)
+                asyncio.create_task(
+                    email_service.send_password_reset_email(
+                        to_email=request.email,
+                        reset_token=reset_token,
+                        username=user["username"],
+                    )
+                )
+                logger.info(
+                    f"Password reset token created for user: {user['username']}"
+                )
+            else:
+                logger.error(
+                    f"Failed to create password reset token for user: {user['username']}"
+                )
+
+        # Clean up expired tokens (run in background)
+        asyncio.create_task(cleanup_expired_tokens(conn))
+
+        # Always return success for security (prevents user enumeration)
+        return success_response(
+            message="If an account exists with that email, a password reset link has been sent."
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Password reset request error for email {request.email}: {str(e)}",
+            exc_info=True,
+        )
+        # Still return success for security
+        return success_response(
+            message="If an account exists with that email, a password reset link has been sent."
+        )
 
 
 class PasswordResetConfirm(BaseModel):
@@ -699,11 +762,15 @@ async def confirm_password_reset(
     """
     Confirm password reset with token.
 
-    Note: This is a placeholder implementation. In production, this should:
-    1. Validate the reset token
-    2. Check token expiration
-    3. Update user password
-    4. Invalidate the token
+    This endpoint validates the reset token, updates the user's password,
+    and marks the token as used.
+
+    **Security Features:**
+    - Token validation with secure hashing
+    - Token expiration checking
+    - One-time use tokens (marked as used after successful reset)
+    - Password strength validation
+    - Audit logging
 
     **Request Body:**
     ```json
@@ -720,11 +787,69 @@ async def confirm_password_reset(
         "message": "Password reset successful"
     }
     ```
+
+    **Error Responses:**
+    - 400: Invalid or expired token
+    - 400: Password does not meet requirements
     """
     logger.info("Password reset confirmation attempt")
 
-    # Placeholder: In production, validate token and update password
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Password reset functionality requires email service configuration",
-    )
+    try:
+        # Hash the provided token for lookup
+        token_hash = email_service.hash_token(request.token)
+
+        # Get and validate token
+        token_record = await get_password_reset_token(conn, token_hash)
+
+        if not token_record:
+            logger.warning("Password reset attempt with invalid or expired token")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token",
+            )
+
+        # Hash the new password
+        password_hash = hash_password(request.new_password)
+
+        # Update user password
+        user_id = (
+            token_record["user_id"]
+            if isinstance(token_record["user_id"], UUID)
+            else UUID(token_record["user_id"])
+        )
+        password_updated = await update_user_password(conn, user_id, password_hash)
+
+        if not password_updated:
+            logger.error(f"Failed to update password for user ID: {user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update password. Please try again.",
+            )
+
+        # Mark token as used
+        token_id = (
+            token_record["id"]
+            if isinstance(token_record["id"], UUID)
+            else UUID(token_record["id"])
+        )
+        await mark_token_used(conn, token_id)
+
+        # Log successful password reset
+        security_logger.log_password_change(str(user_id))
+
+        logger.info(f"Password reset successful for user ID: {user_id}")
+
+        return success_response(message="Password reset successful")
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # Validation error from Pydantic
+        logger.warning(f"Password reset validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Password reset confirmation error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during password reset. Please try again later.",
+        )

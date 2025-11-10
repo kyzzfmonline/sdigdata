@@ -27,6 +27,18 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
 
+    # Email/SMTP Configuration
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_TLS: bool = True
+    FROM_EMAIL: str = "noreply@sdigdata.gov.gh"
+    FROM_NAME: str = "SDIGdata"
+
+    # Password Reset
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 24
+
     # Environment
     ENVIRONMENT: str = "development"
 

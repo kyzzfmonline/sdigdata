@@ -2,6 +2,7 @@
 
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 import asyncpg
 
 
@@ -323,3 +324,94 @@ async def update_theme_preferences(
     result = await conn.execute(query, *params)
     # Extract row count from result string like "UPDATE 1"
     return int(result.split()[-1]) > 0
+
+
+async def get_user_by_email(conn: asyncpg.Connection, email: str) -> Optional[dict]:
+    """Get user by email address."""
+    result = await conn.fetchrow(
+        """
+        SELECT id, username, email, role, organization_id, created_at
+        FROM users
+        WHERE email = $1 AND deleted = FALSE
+        """,
+        email,
+    )
+    return dict(result) if result else None
+
+
+async def create_password_reset_token(
+    conn: asyncpg.Connection,
+    user_id: UUID,
+    email: str,
+    token_hash: str,
+    expires_at: datetime,
+) -> Optional[dict]:
+    """Create a password reset token."""
+    # First, mark any existing unused tokens for this user as used
+    await conn.execute(
+        """
+        UPDATE password_reset_tokens
+        SET used = TRUE, used_at = CURRENT_TIMESTAMP
+        WHERE user_id = $1 AND used = FALSE
+        """,
+        str(user_id),
+    )
+
+    # Create new token
+    result = await conn.fetchrow(
+        """
+        INSERT INTO password_reset_tokens (user_id, email, token_hash, expires_at)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, user_id, email, token_hash, expires_at, used, created_at
+        """,
+        str(user_id),
+        email,
+        token_hash,
+        expires_at,
+    )
+    return dict(result) if result else None
+
+
+async def get_password_reset_token(
+    conn: asyncpg.Connection,
+    token_hash: str,
+) -> Optional[dict]:
+    """Get password reset token by hash."""
+    result = await conn.fetchrow(
+        """
+        SELECT id, user_id, email, token_hash, expires_at, used, created_at, used_at
+        FROM password_reset_tokens
+        WHERE token_hash = $1 AND used = FALSE AND expires_at > CURRENT_TIMESTAMP
+        """,
+        token_hash,
+    )
+    return dict(result) if result else None
+
+
+async def mark_token_used(
+    conn: asyncpg.Connection,
+    token_id: UUID,
+) -> bool:
+    """Mark a password reset token as used."""
+    result = await conn.execute(
+        """
+        UPDATE password_reset_tokens
+        SET used = TRUE, used_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND used = FALSE
+        """,
+        str(token_id),
+    )
+    # Extract row count from result string like "UPDATE 1"
+    return int(result.split()[-1]) > 0
+
+
+async def cleanup_expired_tokens(conn: asyncpg.Connection) -> int:
+    """Clean up expired password reset tokens."""
+    result = await conn.execute(
+        """
+        DELETE FROM password_reset_tokens
+        WHERE expires_at < CURRENT_TIMESTAMP OR (used = TRUE AND used_at < CURRENT_TIMESTAMP - INTERVAL '30 days')
+        """,
+    )
+    # Extract row count from result string like "DELETE 5"
+    return int(result.split()[-1])

@@ -64,10 +64,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Permissions Policy (formerly Feature Policy)
         response.headers["Permissions-Policy"] = (
-            "geolocation=(self), "
-            "camera=(self), "
-            "microphone=(self), "
-            "payment=()"
+            "geolocation=(self), camera=(self), microphone=(self), payment=()"
         )
 
         return response
@@ -86,8 +83,9 @@ async def lifespan(app: FastAPI):
         f"ℹ Storage configured: {settings.SPACES_BUCKET} at {settings.SPACES_ENDPOINT}"
     )
 
-    # Initialize async database pool
-    await init_db_pool(settings)
+    # Initialize async database pool (skip in test environment)
+    if settings.ENVIRONMENT != "test":
+        await init_db_pool(settings)
 
     # Ensure MinIO bucket exists and is publicly accessible
     try:
@@ -289,19 +287,12 @@ async def health_check():
     from app.utils.spaces import get_s3_client
     import time
 
-    health_status = {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "checks": {}
-    }
+    health_status = {"status": "healthy", "timestamp": time.time(), "checks": {}}
 
     all_healthy = True
 
     # Check API
-    health_status["checks"]["api"] = {
-        "status": "healthy",
-        "message": "API is running"
-    }
+    health_status["checks"]["api"] = {"status": "healthy", "message": "API is running"}
 
     # Check database
     try:
@@ -322,8 +313,8 @@ async def health_check():
                     "size": pool_size,
                     "max": pool_max,
                     "idle": pool_idle,
-                    "active": pool_size - pool_idle
-                }
+                    "active": pool_size - pool_idle,
+                },
             }
         else:
             raise Exception("Database pool not initialized")
@@ -331,7 +322,7 @@ async def health_check():
         all_healthy = False
         health_status["checks"]["database"] = {
             "status": "unhealthy",
-            "message": f"Database check failed: {str(e)}"
+            "message": f"Database check failed: {str(e)}",
         }
 
     # Check storage (MinIO/S3)
@@ -344,13 +335,13 @@ async def health_check():
             "status": "healthy",
             "message": "Storage is accessible",
             "endpoint": settings.SPACES_ENDPOINT,
-            "bucket": settings.SPACES_BUCKET
+            "bucket": settings.SPACES_BUCKET,
         }
     except Exception as e:
         # Storage failure is not critical - mark as degraded but don't fail health check
         health_status["checks"]["storage"] = {
             "status": "degraded",
-            "message": f"Storage check warning: {str(e)}"
+            "message": f"Storage check warning: {str(e)}",
         }
         # Note: We don't set all_healthy = False for storage issues
         # as the API can still function without it
@@ -359,9 +350,7 @@ async def health_check():
     if not all_healthy:
         health_status["status"] = "unhealthy"
         return error_response(
-            message="Health check failed",
-            data=health_status,
-            status_code=503
+            message="Health check failed", data=health_status, status_code=503
         )
 
     return success_response(data=health_status)
