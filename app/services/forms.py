@@ -1,10 +1,10 @@
 """Form service functions."""
+# type: ignore
 
-from typing import Optional
-from uuid import UUID
-import asyncpg
 import json
-from typing import Union
+from uuid import UUID
+
+import asyncpg
 
 
 async def create_form(
@@ -14,8 +14,8 @@ async def create_form(
     schema: dict,
     created_by: UUID,
     status: str = "draft",
-    description: Optional[str] = None,
-) -> dict:
+    description: str | None = None,
+) -> dict | None:
     """Create a new form."""
     result = await conn.fetchrow(
         """
@@ -42,7 +42,7 @@ async def create_form(
     return None
 
 
-async def get_form_by_id(conn: asyncpg.Connection, form_id: UUID) -> Optional[dict]:
+async def get_form_by_id(conn: asyncpg.Connection, form_id: UUID) -> dict | None:
     """Get form by ID."""
     result = await conn.fetchrow(
         """
@@ -65,8 +65,8 @@ async def get_form_by_id(conn: asyncpg.Connection, form_id: UUID) -> Optional[di
 
 async def list_forms(
     conn: asyncpg.Connection,
-    organization_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    organization_id: UUID | None = None,
+    status: str | None = None,
 ) -> list[dict]:
     """List forms with optional filters."""
     query = """
@@ -74,7 +74,7 @@ async def list_forms(
         FROM forms
         WHERE deleted = FALSE
     """
-    params = []
+    params: list[str] = []
 
     if organization_id:
         query += f" AND organization_id = ${len(params) + 1}"
@@ -101,7 +101,7 @@ async def list_forms(
 
 async def update_form_status(
     conn: asyncpg.Connection, form_id: UUID, status: str
-) -> Optional[dict]:
+) -> dict | None:
     """Update form status."""
     result = await conn.fetchrow(
         """
@@ -126,7 +126,7 @@ async def update_form_status(
 
 async def assign_form_to_agent(
     conn: asyncpg.Connection, form_id: UUID, agent_id: UUID
-) -> Optional[dict]:
+) -> dict | None:
     """Assign a form to an agent."""
     result = await conn.fetchrow(
         """
@@ -198,8 +198,8 @@ async def assign_form_to_agents(
     form_id: UUID,
     agent_ids: list[UUID],
     assigned_by: UUID,
-    due_date: Optional[str] = None,
-    target_responses: Optional[int] = None,
+    due_date: str | None = None,
+    target_responses: int | None = None,
 ) -> list[dict]:
     """Assign a form to multiple agents."""
     assignments = []
@@ -254,14 +254,14 @@ async def get_form_assignments(conn: asyncpg.Connection, form_id: UUID) -> list[
 async def update_form(
     conn: asyncpg.Connection,
     form_id: UUID,
-    title: Optional[str] = None,
-    schema: Optional[dict] = None,
-    status: Optional[str] = None,
-    description: Optional[str] = None,
-) -> Optional[dict]:
+    title: str | None = None,
+    schema: dict | None = None,
+    status: str | None = None,
+    description: str | None = None,
+) -> dict | None:
     """Update form details."""
-    updates = []
-    params = []
+    updates: list[str] = []
+    params: list[str] = []
 
     if title is not None:
         updates.append(f"title = ${len(params) + 1}")

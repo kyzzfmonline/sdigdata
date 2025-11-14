@@ -1,6 +1,7 @@
 """Standardized API response utilities."""
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
+
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -10,17 +11,17 @@ class APIResponse(BaseModel):
     """Standardized API response model."""
 
     success: bool
-    data: Optional[Any] = None
-    message: Optional[str] = None
-    errors: Optional[Dict[str, Any]] = None
+    data: Any | None = None
+    message: str | None = None
+    errors: dict[str, Any] | None = None
 
 
 class PaginatedResponse(BaseModel):
     """Standardized paginated response model."""
 
     success: bool = True
-    data: Dict[str, Any]
-    message: Optional[str] = None
+    data: dict[str, Any]
+    message: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -28,11 +29,11 @@ class ErrorResponse(BaseModel):
 
     success: bool = False
     message: str
-    data: Optional[Any] = None
-    errors: Optional[Dict[str, Any]] = None
+    data: Any | None = None
+    errors: dict[str, Any] | None = None
 
 
-def success_response(data: Any = None, message: Optional[str] = None) -> Dict[str, Any]:
+def success_response(data: Any = None, message: str | None = None) -> dict[str, Any]:
     """Create a successful API response."""
     return {"success": True, "data": data, "message": message}
 
@@ -40,7 +41,7 @@ def success_response(data: Any = None, message: Optional[str] = None) -> Dict[st
 def error_response(
     message: str,
     data: Any = None,
-    errors: Optional[Dict[str, Any]] = None,
+    errors: dict[str, Any] | None = None,
     status_code: int = status.HTTP_400_BAD_REQUEST,
 ) -> HTTPException:
     """Create an error response that raises an HTTPException."""
@@ -51,7 +52,7 @@ def error_response(
 
 
 def error_response_dict(
-    error_dict: Dict[str, Any], status_code: int = status.HTTP_400_BAD_REQUEST
+    error_dict: dict[str, Any], status_code: int = status.HTTP_400_BAD_REQUEST
 ) -> JSONResponse:
     """Create an error response as a JSONResponse (for exception handlers)."""
     return JSONResponse(status_code=status_code, content=error_dict)
@@ -62,9 +63,9 @@ def paginated_response(
     page: int,
     limit: int,
     total: int,
-    message: Optional[str] = None,
-    **kwargs,
-) -> Dict[str, Any]:
+    message: str | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
     """Create a paginated response."""
     total_pages = (total + limit - 1) // limit  # Ceiling division
 
@@ -85,7 +86,7 @@ def paginated_response(
 
 
 def validation_error_response(
-    errors: Dict[str, Any], message: str = "Validation failed"
+    errors: dict[str, Any], message: str = "Validation failed"
 ) -> HTTPException:
     """Create a validation error response."""
     return error_response(
@@ -94,7 +95,7 @@ def validation_error_response(
 
 
 def not_found_response(
-    resource: str = "Resource", message: Optional[str] = None
+    resource: str = "Resource", message: str | None = None
 ) -> HTTPException:
     """Create a not found error response."""
     return error_response(

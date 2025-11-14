@@ -6,16 +6,15 @@ This script scans the codebase for SQL queries and extracts SELECT statements
 to create a test suite that validates the database schema.
 """
 
-import re
 import os
-from pathlib import Path
-from typing import List, Tuple
+import re
 
-def extract_select_queries(file_path: str) -> List[Tuple[str, int, str]]:
+
+def extract_select_queries(file_path: str) -> list[tuple[str, int, str]]:
     """Extract SELECT queries from a Python file."""
     queries = []
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         content = f.read()
 
     # Pattern to match SQL queries in triple quotes or regular strings
@@ -43,7 +42,7 @@ def extract_select_queries(file_path: str) -> List[Tuple[str, int, str]]:
 
     return queries
 
-def scan_codebase(root_dir: str = 'app') -> List[Tuple[str, int, str]]:
+def scan_codebase(root_dir: str = 'app') -> list[tuple[str, int, str]]:
     """Scan the entire codebase for SELECT queries."""
     all_queries = []
 
@@ -79,7 +78,7 @@ def simplify_query_for_testing(query: str) -> str:
 
     return query
 
-def generate_test_queries() -> List[Tuple[str, str, str]]:
+def generate_test_queries() -> list[tuple[str, str, str]]:
     """Generate a list of unique test queries with metadata."""
     all_queries = scan_codebase()
 
@@ -125,9 +124,9 @@ if __name__ == '__main__':
 
     for i, (source, table, query) in enumerate(queries[:10], 1):
         print(f'# Test {i}: {table} ({source})')
-        print(f'all_good &= test_query(')
-        print(f'    cur,')
+        print('all_good &= test_query(')
+        print('    cur,')
         print(f'    "{table} query",')
         print(f'    "{query}"')
-        print(f')')
+        print(')')
         print()

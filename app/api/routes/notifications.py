@@ -1,20 +1,21 @@
 """Notification routes."""
+# type: ignore
 
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-import asyncpg
 
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.services.notifications import (
-    get_user_notifications,
-    get_unread_count,
-    mark_notification_read,
-    mark_all_read,
     delete_notification,
-    create_notification,
+    get_unread_count,
+    get_user_notifications,
+    mark_all_read,
+    mark_notification_read,
 )
-from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 

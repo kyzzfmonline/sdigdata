@@ -61,3 +61,5 @@ Thumbs.db
 !ENVIRONMENT_SETUP.md
 !docs/**/*.md
 !README.md
+
+*.md

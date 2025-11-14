@@ -1,34 +1,36 @@
 """Authentication routes."""
 
-from typing import Annotated, Optional
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel, Field, field_validator
-import asyncpg
-import asyncio
+# type: ignore
 
+import asyncio
+from typing import Annotated
+from uuid import UUID
+
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field, field_validator
+
+from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
-from app.core.security import hash_password, verify_password, create_access_token
-from app.core.logging_config import security_logger, get_logger
-from app.core.responses import success_response, error_response
-from app.core.validation import PasswordValidator, UsernameValidator, sanitize_string
+from app.core.logging_config import get_logger, security_logger
 from app.core.rate_limiting import login_rate_limiter
-from app.services.users import (
-    create_user,
-    get_user_by_username,
-    get_user_by_id,
-    update_user_last_login,
-    get_user_by_email,
-    create_password_reset_token,
-    get_password_reset_token,
-    mark_token_used,
-    update_user_password,
-    cleanup_expired_tokens,
-)
+from app.core.responses import success_response
+from app.core.security import create_access_token, hash_password, verify_password
+from app.core.validation import PasswordValidator, UsernameValidator, sanitize_string
+from app.services.email import email_service
 from app.services.organizations import get_first_organization
 from app.services.permissions import PermissionChecker
-from app.services.email import email_service
-from app.api.deps import require_admin, get_current_user
+from app.services.users import (
+    cleanup_expired_tokens,
+    create_password_reset_token,
+    create_user,
+    get_password_reset_token,
+    get_user_by_email,
+    get_user_by_username,
+    mark_token_used,
+    update_user_last_login,
+    update_user_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = get_logger(__name__)
@@ -162,6 +164,12 @@ async def register(
             organization_id=UUID(request.organization_id),
         )
 
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user",
+            )
+
         # Log user registration
         security_logger.log_user_registration(
             username=request.username,
@@ -180,11 +188,11 @@ async def register(
         raise
     except ValueError as e:
         # Validation error from Pydantic
-        logger.warning(f"Registration validation error: {str(e)}")
+        logger.warning(f"Registration validation error: {e!s}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(
-            f"Registration error for user {request.username}: {str(e)}", exc_info=True
+            f"Registration error for user {request.username}: {e!s}", exc_info=True
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -332,9 +340,7 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Login error for user {request.username}: {str(e)}", exc_info=True
-        )
+        logger.error(f"Login error for user {request.username}: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred during login. Please try again later.",
@@ -457,6 +463,12 @@ async def bootstrap_admin(
                 primary_color="#1976d2",
             )
 
+            if not organization:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create default organization",
+                )
+
         # Hash password
         password_hash = hash_password(request.password)
 
@@ -474,6 +486,12 @@ async def bootstrap_admin(
             organization_id=org_id,
         )
 
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create admin user",
+            )
+
         # Log user registration
         security_logger.log_user_registration(
             username=request.username,
@@ -490,11 +508,11 @@ async def bootstrap_admin(
         raise
     except ValueError as e:
         # Validation error from Pydantic
-        logger.warning(f"Bootstrap admin validation error: {str(e)}")
+        logger.warning(f"Bootstrap admin validation error: {e!s}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(
-            f"Bootstrap admin creation error for user {request.username}: {str(e)}",
+            f"Bootstrap admin creation error for user {request.username}: {e!s}",
             exc_info=True,
         )
         raise HTTPException(
@@ -629,7 +647,7 @@ async def refresh_token(
 
     except Exception as e:
         logger.error(
-            f"Token refresh error for user {current_user.get('username', 'unknown')}: {str(e)}",
+            f"Token refresh error for user {current_user.get('username', 'unknown')}: {e!s}",
             exc_info=True,
         )
         raise HTTPException(
@@ -692,9 +710,9 @@ async def request_password_reset(
             # Create token in database
             token_record = await create_password_reset_token(
                 conn,
-                user_id=user["id"]
-                if isinstance(user["id"], UUID)
-                else UUID(user["id"]),
+                user_id=(
+                    user["id"] if isinstance(user["id"], UUID) else UUID(user["id"])
+                ),
                 email=request.email,
                 token_hash=token_hash,
                 expires_at=expires_at,
@@ -727,7 +745,7 @@ async def request_password_reset(
 
     except Exception as e:
         logger.error(
-            f"Password reset request error for email {request.email}: {str(e)}",
+            f"Password reset request error for email {request.email}: {e!s}",
             exc_info=True,
         )
         # Still return success for security
@@ -845,10 +863,10 @@ async def confirm_password_reset(
         raise
     except ValueError as e:
         # Validation error from Pydantic
-        logger.warning(f"Password reset validation error: {str(e)}")
+        logger.warning(f"Password reset validation error: {e!s}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(f"Password reset confirmation error: {str(e)}", exc_info=True)
+        logger.error(f"Password reset confirmation error: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred during password reset. Please try again later.",

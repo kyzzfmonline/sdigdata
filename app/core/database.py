@@ -9,18 +9,18 @@ asyncpg is the fastest PostgreSQL driver for Python:
 - Production-ready
 """
 
-import asyncpg
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from app.core.config import Settings, get_settings
+import asyncpg
 
+from app.core.config import Settings
 
 # Global connection pool
 _pool: asyncpg.Pool | None = None
 
 
-async def init_db_pool(settings: Settings):
+async def init_db_pool(settings: Settings) -> None:
     """
     Initialize database connection pool on startup.
 
@@ -30,19 +30,19 @@ async def init_db_pool(settings: Settings):
     _pool = await asyncpg.create_pool(
         dsn=settings.DATABASE_URL,
         ssl=False,  # Disable SSL for external connections
-        min_size=10,  # Minimum number of connections in pool
-        max_size=50,  # Maximum number of connections in pool
-        max_queries=50000,  # Maximum queries per connection before recycling
-        max_inactive_connection_lifetime=300,  # Close idle connections after 5 minutes
-        timeout=30,  # Connection timeout in seconds
-        command_timeout=60,  # Query timeout in seconds
+        min_size=1,  # Minimum number of connections in pool
+        max_size=10,  # Maximum number of connections in pool
+        max_queries=1000,  # Maximum queries per connection before recycling
+        max_inactive_connection_lifetime=60,  # Close idle connections after 1 minute
+        timeout=10,  # Connection timeout in seconds
+        command_timeout=30,  # Query timeout in seconds
     )
     print(
         f"✅ Database pool initialized: {_pool.get_size()} / {_pool.get_max_size()} connections"
     )
 
 
-async def close_db_pool():
+async def close_db_pool() -> None:
     """
     Close database connection pool on shutdown.
 

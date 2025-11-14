@@ -1,7 +1,7 @@
 """Permission checking service for role-based access control."""
 
-from typing import List, Optional
 from uuid import UUID
+
 import asyncpg
 
 
@@ -33,7 +33,7 @@ class PermissionChecker:
         )
         return result or False
 
-    async def has_any_permission(self, user_id: UUID, permissions: List[tuple]) -> bool:
+    async def has_any_permission(self, user_id: UUID, permissions: list[tuple]) -> bool:
         """Check if user has any of the specified permissions."""
         if not permissions:
             return False
@@ -66,7 +66,7 @@ class PermissionChecker:
         result = await self.conn.fetchval(query, *params)
         return result or False
 
-    async def get_user_permissions(self, user_id: UUID) -> List[dict]:
+    async def get_user_permissions(self, user_id: UUID) -> list[dict]:
         """Get all permissions for a user."""
         rows = await self.conn.fetch(
             """
@@ -83,11 +83,11 @@ class PermissionChecker:
         )
         return [dict(row) for row in rows]
 
-    async def get_user_roles(self, user_id: UUID) -> List[dict]:
+    async def get_user_roles(self, user_id: UUID) -> list[dict]:
         """Get all active roles for a user."""
         rows = await self.conn.fetch(
             """
-            SELECT r.id, r.name, r.description, r.level, ur.assigned_at, ur.expires_at
+            SELECT r.id, r.name, r.description, r.level, ur.assigned_at, ur.expires_at, ur.is_active
             FROM user_roles ur
             JOIN roles r ON ur.role_id = r.id
             WHERE ur.user_id = $1
@@ -125,7 +125,7 @@ async def check_permission(
 
 async def require_permission(
     conn: asyncpg.Connection, user_id: UUID, resource: str, action: str
-):
+) -> None:
     """Raise exception if user doesn't have permission."""
     if not await check_permission(conn, user_id, resource, action):
         raise HTTPException(
@@ -135,4 +135,4 @@ async def require_permission(
 
 
 # Import here to avoid circular imports
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status  # noqa: E402

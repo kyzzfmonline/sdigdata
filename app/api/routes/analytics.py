@@ -2,17 +2,18 @@
 
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query
-import asyncpg
 
+import asyncpg
+from fastapi import APIRouter, Depends, Query
+
+from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
 from app.services.analytics import (
+    get_agent_performance,
     get_dashboard_stats,
     get_form_analytics,
-    get_agent_performance,
     get_performance_metrics,
 )
-from app.api.deps import get_current_user, require_admin
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 

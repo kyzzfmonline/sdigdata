@@ -1,31 +1,44 @@
 """FastAPI main application for SDIGdata backend."""
+# type: ignore
 
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
-from pydantic import ValidationError
+
 import asyncpg
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.routes import (
+    analytics,
+    api_keys,
+    audit,
+    auth,
+    files,
+    forms,
+    ml,
+    notifications,
+    organizations,
+    responses,
+    security_settings,
+    sessions,
+    users,
+)
+from app.api.routes.conditional_logic import router as conditional_logic_router
+from app.api.routes.form_locking import router as form_locking_router
+from app.api.routes.form_templates import router as form_templates_router
+from app.api.routes.form_validation import router as form_validation_router
+from app.api.routes.form_versioning import router as form_versioning_router
+from app.api.routes.metrics import router as metrics_router
+from app.api.routes.permission_groups import router as permission_groups_router
+from app.api.routes.public import router as public_router
+from app.api.routes.rbac import router as rbac_router
+from app.api.routes.search import router as search_router
 from app.core.config import settings
-from app.core.logging_config import setup_logging, get_logger
-from app.core.database import init_db_pool, close_db_pool
+from app.core.database import close_db_pool, init_db_pool
+from app.core.logging_config import get_logger, setup_logging
 from app.core.responses import error_response
 from app.utils.spaces import ensure_bucket_exists
-from app.api.routes import (
-    auth,
-    organizations,
-    forms,
-    responses,
-    files,
-    ml,
-    users,
-    notifications,
-    analytics,
-)
-from app.api.routes.public import router as public_router
 
 # Setup logging
 setup_logging()
@@ -98,7 +111,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    await close_db_pool()
+    if settings.ENVIRONMENT != "test":
+        await close_db_pool()
     logger.info("Shutting down SDIGdata backend...")
     print("Shutting down SDIGdata backend...")
 
@@ -141,6 +155,19 @@ app = FastAPI(
     - GeoJSON spatial data exports for geospatial ML
     - Quality statistics and analytics via /ml/quality-stats
     - Bulk exports optimized for ML pipelines
+
+    ## API Versioning
+
+    This API supports versioning. Use versioned endpoints for stability:
+
+    - `/v1/*` - Version 1 (current stable)
+    - `/*` - Latest version (may change)
+
+    Example:
+    ```
+    GET /v1/forms
+    GET /forms  # Same as latest version
+    ```
     """,
     version="1.0.0",
     lifespan=lifespan,
@@ -154,7 +181,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # CORS middleware
 if settings.ENVIRONMENT == "development":
     # More permissive CORS for development
-    print(f"🔧 CORS: Development mode - allowing all origins")
+    print("🔧 CORS: Development mode - allowing all origins")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Allow all origins in development
@@ -255,7 +282,39 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include routers
+# Create versioned API router
+v1_router = APIRouter(prefix="/v1")
+
+# Include all routers under v1
+v1_router.include_router(auth.router)
+v1_router.include_router(users.router)
+v1_router.include_router(organizations.router)
+v1_router.include_router(forms.router)
+v1_router.include_router(responses.router)
+v1_router.include_router(files.router)
+v1_router.include_router(notifications.router)
+v1_router.include_router(analytics.router)
+v1_router.include_router(ml.router)
+v1_router.include_router(search_router)
+v1_router.include_router(metrics_router)
+v1_router.include_router(form_templates_router)
+v1_router.include_router(conditional_logic_router)
+v1_router.include_router(form_versioning_router)
+v1_router.include_router(form_validation_router)
+v1_router.include_router(form_locking_router)
+v1_router.include_router(rbac_router)
+v1_router.include_router(audit.router)
+v1_router.include_router(sessions.router)
+v1_router.include_router(api_keys.router)
+v1_router.include_router(security_settings.router)
+v1_router.include_router(permission_groups_router)
+if public_router:
+    v1_router.include_router(public_router)
+
+# Include versioned router
+app.include_router(v1_router)
+
+# Also include routers at root level for backward compatibility (latest version)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(organizations.router)
@@ -265,6 +324,19 @@ app.include_router(files.router)
 app.include_router(notifications.router)
 app.include_router(analytics.router)
 app.include_router(ml.router)
+app.include_router(search_router)
+app.include_router(metrics_router)
+app.include_router(form_templates_router)
+app.include_router(conditional_logic_router)
+app.include_router(form_versioning_router)
+app.include_router(form_validation_router)
+app.include_router(form_locking_router)
+app.include_router(rbac_router)
+app.include_router(audit.router)
+app.include_router(sessions.router)
+app.include_router(api_keys.router)
+app.include_router(security_settings.router)
+app.include_router(permission_groups_router)
 if public_router:
     app.include_router(public_router)
 
@@ -282,10 +354,11 @@ async def health_check():
 
     Returns 200 if all healthy, 503 if any component is down.
     """
-    from app.core.responses import success_response, error_response
-    from app.core.database import _pool
-    from app.utils.spaces import get_s3_client
     import time
+
+    from app.core.database import _pool
+    from app.core.responses import success_response
+    from app.utils.spaces import get_s3_client
 
     health_status = {"status": "healthy", "timestamp": time.time(), "checks": {}}
 
@@ -296,37 +369,47 @@ async def health_check():
 
     # Check database
     try:
-        if _pool:
-            async with _pool.acquire() as conn:
-                # Simple query to verify database is accessible
-                await conn.fetchval("SELECT 1")
+        from app.core.config import get_settings
 
-            # Get pool statistics
+        current_settings = get_settings()
+
+        # Try to create a direct connection for health check
+        import asyncpg
+
+        conn = await asyncpg.connect(dsn=current_settings.DATABASE_URL)
+        await conn.fetchval("SELECT 1")
+        await conn.close()
+
+        # Also check pool if available
+        pool_info = {}
+        if _pool:
             pool_size = _pool.get_size()
             pool_max = _pool.get_max_size()
             pool_idle = _pool.get_idle_size()
-
-            health_status["checks"]["database"] = {
-                "status": "healthy",
-                "message": "Database is accessible",
-                "pool": {
-                    "size": pool_size,
-                    "max": pool_max,
-                    "idle": pool_idle,
-                    "active": pool_size - pool_idle,
-                },
+            pool_info = {
+                "size": pool_size,
+                "max": pool_max,
+                "idle": pool_idle,
+                "active": pool_size - pool_idle,
             }
-        else:
-            raise Exception("Database pool not initialized")
+
+        health_status["checks"]["database"] = {
+            "status": "healthy",
+            "message": "Database is accessible",
+            "pool": pool_info,
+        }
     except Exception as e:
         all_healthy = False
         health_status["checks"]["database"] = {
             "status": "unhealthy",
-            "message": f"Database check failed: {str(e)}",
+            "message": f"Database check failed: {e!s}",
         }
 
     # Check storage (MinIO/S3)
     try:
+        from app.core.config import get_settings
+
+        current_settings = get_settings()
         s3_client = get_s3_client()
         # Try to list buckets to verify connectivity
         s3_client.list_buckets()
@@ -334,14 +417,14 @@ async def health_check():
         health_status["checks"]["storage"] = {
             "status": "healthy",
             "message": "Storage is accessible",
-            "endpoint": settings.SPACES_ENDPOINT,
-            "bucket": settings.SPACES_BUCKET,
+            "endpoint": current_settings.SPACES_ENDPOINT,
+            "bucket": current_settings.SPACES_BUCKET,
         }
     except Exception as e:
         # Storage failure is not critical - mark as degraded but don't fail health check
         health_status["checks"]["storage"] = {
             "status": "degraded",
-            "message": f"Storage check warning: {str(e)}",
+            "message": f"Storage check warning: {e!s}",
         }
         # Note: We don't set all_healthy = False for storage issues
         # as the API can still function without it

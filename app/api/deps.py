@@ -1,15 +1,17 @@
 """API dependencies for authentication and authorization."""
+# type: ignore
 
-from typing import Annotated, List, Tuple
+from typing import Annotated, Any
 from uuid import UUID
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 import asyncpg
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.services.users import get_user_by_id
 from app.services.permissions import PermissionChecker, require_permission
+from app.services.users import get_user_by_id
 
 security = HTTPBearer()
 
@@ -122,7 +124,7 @@ async def require_permission_dep(
 
 
 async def require_any_permission_dep(
-    permissions: List[Tuple[str, str]],
+    permissions: list[tuple[str, str]],
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ) -> dict:
@@ -145,21 +147,21 @@ async def require_any_permission_dep(
 async def require_users_admin(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
-):
+) -> Any:
     return await require_permission_dep("users", "admin", current_user, conn)
 
 
 async def require_users_read(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
-):
+) -> Any:
     return await require_permission_dep("users", "read", current_user, conn)
 
 
 async def require_forms_admin(
     current_user: Annotated[dict, Depends(get_current_user)],
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
-):
+) -> Any:
     return await require_permission_dep("forms", "admin", current_user, conn)
 
 

@@ -1,7 +1,6 @@
 """Input validation utilities for authentication and security."""
 
 import re
-from typing import Optional, Tuple
 
 
 class PasswordValidator:
@@ -20,15 +19,35 @@ class PasswordValidator:
 
     # Common passwords to reject
     COMMON_PASSWORDS = {
-        "password", "123456", "12345678", "qwerty", "abc123",
-        "monkey", "letmein", "trustno1", "dragon", "baseball",
-        "iloveyou", "master", "sunshine", "ashley", "bailey",
-        "passw0rd", "shadow", "123123", "654321", "superman",
-        "qazwsx", "michael", "football", "admin", "admin123"
+        "password",
+        "123456",
+        "12345678",
+        "qwerty",
+        "abc123",
+        "monkey",
+        "letmein",
+        "trustno1",
+        "dragon",
+        "baseball",
+        "iloveyou",
+        "master",
+        "sunshine",
+        "ashley",
+        "bailey",
+        "passw0rd",
+        "shadow",
+        "123123",
+        "654321",
+        "superman",
+        "qazwsx",
+        "michael",
+        "football",
+        "admin",
+        "admin123",
     }
 
     @classmethod
-    def validate(cls, password: str) -> Tuple[bool, Optional[str]]:
+    def validate(cls, password: str) -> tuple[bool, str | None]:
         """
         Validate password strength.
 
@@ -44,7 +63,10 @@ class PasswordValidator:
 
         # Check for common passwords
         if password.lower() in cls.COMMON_PASSWORDS:
-            return False, "This password is too common. Please choose a stronger password"
+            return (
+                False,
+                "This password is too common. Please choose a stronger password",
+            )
 
         # Check complexity requirements
         if cls.REQUIRE_UPPERCASE and not re.search(r"[A-Z]", password):
@@ -57,11 +79,17 @@ class PasswordValidator:
             return False, "Password must contain at least one digit"
 
         if cls.REQUIRE_SPECIAL and not any(c in cls.SPECIAL_CHARS for c in password):
-            return False, f"Password must contain at least one special character ({cls.SPECIAL_CHARS})"
+            return (
+                False,
+                f"Password must contain at least one special character ({cls.SPECIAL_CHARS})",
+            )
 
         # Check for sequential characters (e.g., "abc", "123") - only check for 4+ chars
         if cls._has_sequential_chars(password, length=4):
-            return False, "Password must not contain long sequential patterns (e.g., 'abcd', '1234')"
+            return (
+                False,
+                "Password must not contain long sequential patterns (e.g., 'abcd', '1234')",
+            )
 
         return True, None
 
@@ -71,7 +99,7 @@ class PasswordValidator:
         password_lower = password.lower()
 
         for i in range(len(password_lower) - length + 1):
-            substring = password_lower[i:i + length]
+            substring = password_lower[i : i + length]
 
             # Check for sequential numbers
             if substring.isdigit():
@@ -84,9 +112,15 @@ class PasswordValidator:
             # Check for sequential letters
             if substring.isalpha():
                 ascii_vals = [ord(c) for c in substring]
-                if all(ascii_vals[j] + 1 == ascii_vals[j + 1] for j in range(len(ascii_vals) - 1)):
+                if all(
+                    ascii_vals[j] + 1 == ascii_vals[j + 1]
+                    for j in range(len(ascii_vals) - 1)
+                ):
                     return True
-                if all(ascii_vals[j] - 1 == ascii_vals[j + 1] for j in range(len(ascii_vals) - 1)):
+                if all(
+                    ascii_vals[j] - 1 == ascii_vals[j + 1]
+                    for j in range(len(ascii_vals) - 1)
+                ):
                     return True
 
         return False
@@ -103,12 +137,21 @@ class UsernameValidator:
 
     # Reserved usernames
     RESERVED_USERNAMES = {
-        "admin", "root", "system", "api", "app", "test",
-        "user", "guest", "null", "undefined", "administrator"
+        "admin",
+        "root",
+        "system",
+        "api",
+        "app",
+        "test",
+        "user",
+        "guest",
+        "null",
+        "undefined",
+        "administrator",
     }
 
     @classmethod
-    def validate(cls, username: str) -> Tuple[bool, Optional[str]]:
+    def validate(cls, username: str) -> tuple[bool, str | None]:
         """
         Validate username format.
 
@@ -124,7 +167,10 @@ class UsernameValidator:
 
         # Check pattern
         if not cls.VALID_PATTERN.match(username):
-            return False, "Username can only contain letters, numbers, dots, hyphens, and underscores"
+            return (
+                False,
+                "Username can only contain letters, numbers, dots, hyphens, and underscores",
+            )
 
         # Note: Reserved username check removed - "admin" is a valid existing user
         # If you need to prevent registration of reserved names, check at registration time
@@ -135,7 +181,10 @@ class UsernameValidator:
             return False, "Username cannot start or end with a special character"
 
         # Can't have consecutive special characters
-        if any(a in "._-" and b in "._-" for a, b in zip(username, username[1:])):
+        if any(
+            a in "._-" and b in "._-"
+            for a, b in zip(username, username[1:], strict=False)
+        ):
             return False, "Username cannot contain consecutive special characters"
 
         return True, None
@@ -170,7 +219,6 @@ def sanitize_string(value: str, max_length: int = 1000) -> str:
 def validate_uuid(value: str) -> bool:
     """Validate UUID format."""
     uuid_pattern = re.compile(
-        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-        re.IGNORECASE
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
     )
     return bool(uuid_pattern.match(value))

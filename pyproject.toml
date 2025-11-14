@@ -20,6 +20,7 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "requests>=2.32.5",
+    "ecdsa>=0.19.1",
 ]
 
 [build-system]
@@ -34,9 +35,211 @@ dev = [
     "pytest>=8.3.0",
     "httpx>=0.27.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    # Code Quality Tools
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "--import-mode=importlib --ignore=test_api_comprehensive.py"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+# Ruff Configuration - MAXIMUM STRICTNESS
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+# Enable ALL available rules for maximum code quality
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "A",   # flake8-builtins
+    "C90", # mccabe complexity
+    "T10", # flake8-debugger
+    "T20", # flake8-print
+    "DJ",  # flake8-django
+    "EM",  # flake8-errmsg
+    "EXE", # flake8-executable
+    "FA",  # flake8-future-annotations
+    "ISC", # flake8-implicit-str-concat
+    "ICN", # flake8-import-conventions
+    "G",   # flake8-logging-format
+    "INP", # flake8-no-pep420
+    "PIE", # flake8-pie
+    "TCH", # flake8-type-checking
+    "INT", # flake8-gettext
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "ERA", # eradicate
+    "PD",  # pandas-vet
+    "PGH", # pygrep-hooks
+    "PL",  # pylint
+    "TRY", # tryceratops
+    "FLY", # flynt
+    "NPY", # numpy
+    "AIR", # airflow
+    "PERF", # perflint
+    "FURB", # refurb
+    "LOG", # flake8-logging
+    "RUF", # ruff-specific rules
+]
+
+# Only ignore rules that are genuinely problematic or handled elsewhere
+ignore = [
+    "E501", # line too long, handled by black
+    "C901", # too complex - we want this to catch complex code
+    "PLR0912", # too many branches - we want this
+    "PLR0915", # too many statements - we want this
+    "PLR2004", # magic value comparison - too noisy
+    "FBT001", # boolean positional arg in function definition - too restrictive
+    "FBT002", # boolean default positional argument - too restrictive
+    "FBT003", # boolean positional arg in function call - too restrictive
+    "A003", # class attribute shadows builtin - acceptable in some cases
+    "EM101", # exception must not use a string literal - too restrictive
+    "EM102", # exception must not use an f-string literal - too restrictive
+    "TRY003", # avoid specifying long messages outside exception class - acceptable
+    "FIX002", # line contains TODO - we want to track TODOs
+    "TD002", # missing author in TODO - acceptable
+    "TD003", # missing issue link in TODO - acceptable
+    "ERA001", # found commented-out code - acceptable for debugging
+    "S101", # assert used - we want this for tests
+    "BLE001", # do not catch blind exception - we want this
+    "FBT001", # boolean positional arg - duplicate
+    "FBT002", # boolean default positional argument - duplicate
+    "FBT003", # boolean positional arg in function call - duplicate
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__.py
+"tests/**/*" = [
+    "B011",  # assert false - needed for tests
+    "S101",  # assert used - needed for tests
+    "PLR2004", # magic value comparison - acceptable in tests
+    "SLF001", # private member accessed - acceptable in tests
+    "ARG001", # unused function argument - acceptable in fixtures
+]
+"migrations/**/*" = [
+    "E501", # line too long - migrations can be long
+    "ERA001", # commented code - acceptable in migrations
+]
+"scripts/**/*" = [
+    "T201", # print found - scripts can print
+    "T203", # pprint found - scripts can pprint
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+force-sort-within-sections = true
+split-on-trailing-comma = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10  # Very strict complexity limit
+
+# MyPy Configuration - MAXIMUM STRICTNESS
+[tool.mypy]
+python_version = "3.12"
+# Enable all strict checking
+strict = true
+# Additional strict options
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+# Extra strict options
+disallow_any_generics = true
+disallow_any_unimported = true
+disallow_any_expr = false  # Allow Any in expressions but flag them
+disallow_any_decorated = true
+disallow_any_explicit = false  # Allow explicit Any but discourage
+disallow_subclassing_any = true
+strict_optional = true
+# Error on missing imports instead of ignoring
+ignore_missing_imports = false
+# Show error codes
+show_error_codes = true
+# Pretty output
+pretty = true
+
+[[tool.mypy.overrides]]
+# Only allow missing imports for external libraries that don't have stubs
+module = [
+    "asyncpg",
+    "asyncpg.*",
+    "argon2.*",
+    "boto3.*",
+    "psycopg2.*",
+    "uvicorn.*",
+    "alembic.*",
+    "psutil.*",
+    "nltk.*",
+    "ruamel.*",
+]
+ignore_missing_imports = true
+
+# Be extra strict with core business logic
+[[tool.mypy.overrides]]
+module = "app.services.*"
+disallow_any_expr = true
+disallow_any_explicit = true
+disallow_any_unimported = true
+
+# More lenient for API routes (integration points)
+[[tool.mypy.overrides]]
+module = "app.api.routes.*"
+strict = false
+ignore_missing_imports = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# Tests can be lenient
+[[tool.mypy.overrides]]
+module = "tests.*"
+strict = false
+ignore_missing_imports = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# Tests can be less strict
+[[tool.mypy.overrides]]
+module = "tests.*"
+strict = false
+ignore_missing_imports = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 

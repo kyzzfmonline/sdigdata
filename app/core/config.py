@@ -1,7 +1,6 @@
 """Application configuration management."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -9,8 +8,8 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str
-    DATABASE_URL_YOYO: Optional[str] = None
-    DATABASE_URL_APP: Optional[str] = None
+    DATABASE_URL_YOYO: str | None = None
+    DATABASE_URL_APP: str | None = None
 
     # JWT Configuration
     SECRET_KEY: str
@@ -50,7 +49,7 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
 
-settings = Settings()
+settings = Settings()  # type: ignore
 
 
 def get_settings() -> Settings:

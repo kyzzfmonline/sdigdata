@@ -1,22 +1,21 @@
 """Public form routes for anonymous access."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
+
 import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.logging_config import get_logger
+from app.core.rate_limiting import anonymous_rate_limiter
 from app.core.responses import (
     success_response,
-    error_response,
-    not_found_response,
 )
-from app.services.responses import create_response
 from app.services.forms import get_form_by_id
 from app.services.ml_quality import calculate_and_store_quality
-from app.core.rate_limiting import anonymous_rate_limiter
+from app.services.responses import create_response
 
 router = APIRouter(prefix="/public", tags=["Public"])
 logger = get_logger(__name__)
@@ -26,7 +25,7 @@ class PublicResponseCreate(BaseModel):
     """Anonymous response submission request."""
 
     data: dict
-    attachments: Optional[dict] = None
+    attachments: dict | None = None
 
 
 @router.get("/forms/{form_id}")
@@ -244,7 +243,7 @@ async def submit_public_response(
     except Exception as e:
         logger.error(
             f"Error submitting anonymous response - Form: {form_id}, "
-            f"IP: {client_ip}: {str(e)}",
+            f"IP: {client_ip}: {e!s}",
             exc_info=True,
         )
         raise HTTPException(

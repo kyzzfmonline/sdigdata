@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
-import asyncpg
 import os
+
+import asyncpg
 
 
 async def init_db():
@@ -13,7 +14,7 @@ async def init_db():
     conn = await asyncpg.connect(db_url)
     try:
         # Read and execute the init script
-        with open("init_db_extensions.sql", "r") as f:
+        with open("init_db_extensions.sql") as f:
             sql = f.read()
         await conn.execute(sql)
         print("✅ Database extensions initialized")

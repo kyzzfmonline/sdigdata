@@ -1,31 +1,40 @@
 """Response service functions."""
 
-from typing import Optional
-from uuid import UUID
 from datetime import datetime, timedelta
-import asyncpg
 import json
+from typing import Any
+from uuid import UUID
+
+import asyncpg
 
 
 async def create_response(
     conn: asyncpg.Connection,
     form_id: UUID,
-    submitted_by: Optional[UUID],
+    submitted_by: UUID | None,
     data: dict,
-    attachments: Optional[dict] = None,
+    attachments: dict | None = None,
     submission_type: str = "authenticated",
-    submitter_ip: Optional[str] = None,
-    user_agent: Optional[str] = None,
-    anonymous_metadata: Optional[dict] = None,
-) -> Optional[dict]:
+    submitter_ip: str | None = None,
+    user_agent: str | None = None,
+    anonymous_metadata: dict | None = None,
+) -> dict | None:
     """Create a new form response."""
+    # Get form to obtain organization_id
+    from app.services.forms import get_form_by_id
+
+    form = await get_form_by_id(conn, form_id)
+    if not form:
+        return None
+
     result = await conn.fetchrow(
         """
-        INSERT INTO responses (form_id, submitted_by, data, attachments, submission_type, submitter_ip, user_agent, anonymous_metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, form_id, submitted_by, data, attachments, submitted_at, submission_type, submitter_ip, user_agent, anonymous_metadata
+        INSERT INTO responses (form_id, organization_id, submitted_by, data, attachments, submission_type, submitter_ip, user_agent, anonymous_metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, form_id, organization_id, submitted_by, data, attachments, submitted_at, submission_type, submitter_ip, user_agent, anonymous_metadata
         """,
         str(form_id),
+        str(form["organization_id"]),
         str(submitted_by) if submitted_by else None,
         json.dumps(data),
         json.dumps(attachments) if attachments else None,
@@ -59,7 +68,7 @@ async def create_response(
 
 async def get_response_by_id(
     conn: asyncpg.Connection, response_id: UUID
-) -> Optional[dict]:
+) -> dict | None:
     """Get response by ID."""
     result = await conn.fetchrow(
         """
@@ -102,9 +111,9 @@ async def get_response_by_id(
 
 async def list_responses(
     conn: asyncpg.Connection,
-    form_id: Optional[UUID] = None,
-    submitted_by: Optional[UUID] = None,
-    agent_id: Optional[UUID] = None,
+    form_id: UUID | None = None,
+    submitted_by: UUID | None = None,
+    agent_id: UUID | None = None,
 ) -> list[dict]:
     """List responses with optional filters."""
     query = """
@@ -115,7 +124,7 @@ async def list_responses(
         LEFT JOIN users u ON r.submitted_by = u.id
         WHERE r.deleted = FALSE
     """
-    params = []
+    params: list[str] = []
 
     if form_id:
         query += f" AND r.form_id = ${len(params) + 1}"
@@ -178,7 +187,7 @@ async def get_form_responses_count(conn: asyncpg.Connection, form_id: UUID) -> i
 
 
 def aggregate_data(
-    responses: list[dict], group_by: str, aggregate: str, field: Optional[str] = None
+    responses: list[dict], group_by: str, aggregate: str, field: str | None = None
 ) -> list[dict]:
     """Aggregate response data by group and function."""
     from collections import defaultdict
@@ -194,12 +203,12 @@ def aggregate_data(
 
     result = []
     for group_key, group_responses in groups.items():
-        value = len(group_responses)  # Default to count
+        value = float(len(group_responses))  # Default to count
 
         if aggregate == "count":
             value = len(group_responses)
         elif field and aggregate in ["sum", "avg", "min", "max"]:
-            values = []
+            values: list[int | float] = []
             for resp in group_responses:
                 val = _get_nested_value(resp["data"], field)
                 if isinstance(val, (int, float)) and not isinstance(val, bool):
@@ -241,14 +250,14 @@ def aggregate_data(
 
 def create_time_series_data(
     responses: list[dict],
-    date_field: Optional[str],
-    granularity: Optional[str],
+    date_field: str | None,
+    granularity: str | None,
     aggregate: str,
-    field: Optional[str] = None,
+    field: str | None = None,
 ) -> list[dict]:
     """Create time series data from responses."""
     from collections import defaultdict
-    from datetime import datetime, timedelta
+    from datetime import datetime
     import statistics
 
     groups = defaultdict(list)
@@ -269,12 +278,12 @@ def create_time_series_data(
 
     result = []
     for period_key, period_responses in sorted(groups.items()):
-        value = len(period_responses)  # Default to count
+        value = float(len(period_responses))  # Default to count
 
         if aggregate == "count":
             value = len(period_responses)
         elif field and aggregate in ["sum", "avg", "min", "max"]:
-            values = []
+            values: list[int | float] = []
             for resp in period_responses:
                 val = _get_nested_value(resp["data"], field)
                 if isinstance(val, (int, float)):
@@ -356,15 +365,15 @@ def calculate_summary_stats(responses: list[dict]) -> dict:
 
     # Date range - handle various date formats
     dates = []
+    start_date = None
+    end_date = None
     for resp in responses:
         date_value = resp.get("submitted_at")
         if date_value:
             if isinstance(date_value, str):
                 try:
                     # Try to parse as ISO format
-                    parsed_date = datetime.fromisoformat(
-                        date_value.replace("Z", "+00:00")
-                    )
+                    datetime.fromisoformat(date_value.replace("Z", "+00:00"))
                     dates.append(date_value)  # Keep original string format
                 except (ValueError, TypeError):
                     continue  # Skip invalid dates
@@ -387,7 +396,7 @@ def calculate_summary_stats(responses: list[dict]) -> dict:
     }
 
 
-def _get_nested_value(data: dict, path: str):
+def _get_nested_value(data: dict, path: str) -> Any:
     """Get nested value from dict using dot notation."""
     keys = path.split(".")
     current = data
@@ -403,7 +412,7 @@ def _get_nested_value(data: dict, path: str):
         return None
 
 
-def _get_time_period_key(date: datetime, granularity: Optional[str]) -> str:
+def _get_time_period_key(date: datetime, granularity: str | None) -> str:
     """Get time period key for grouping."""
     actual_granularity = granularity or "day"
     if actual_granularity == "hour":

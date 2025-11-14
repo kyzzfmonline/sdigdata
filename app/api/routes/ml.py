@@ -1,15 +1,17 @@
 """ML/AI data export routes for training datasets and await analytics."""
+# type: ignore
 
-from typing import Annotated, Optional
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from datetime import datetime
-import asyncpg
 import json
+from typing import Annotated
+from uuid import UUID
 
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+
+from app.api.deps import require_admin
 from app.core.database import get_db
 from app.core.logging_config import get_logger
-from app.api.deps import get_current_user, require_admin
 from app.services.forms import get_form_by_id
 
 router = APIRouter(prefix="/ml", tags=["ML & AI"])
@@ -20,14 +22,14 @@ logger = get_logger(__name__)
 async def get_training_data(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     admin_user: Annotated[dict, Depends(require_admin)],
-    form_id: Optional[str] = None,
+    form_id: str | None = None,
     min_quality: float = Query(
         0.6, ge=0.0, le=1.0, description="Minimum quality score"
     ),
     suitable_only: bool = Query(
         True, description="Only return responses suitable for training"
     ),
-    limit: Optional[int] = Query(
+    limit: int | None = Query(
         None, ge=1, le=10000, description="Maximum number of records"
     ),
 ):
@@ -121,7 +123,7 @@ async def get_training_data(
 async def get_spatial_data(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     admin_user: Annotated[dict, Depends(require_admin)],
-    form_id: Optional[str] = None,
+    form_id: str | None = None,
     min_quality: float = Query(0.5, ge=0.0, le=1.0),
     format: str = Query("geojson", pattern="^(geojson|json)$"),
 ):
@@ -250,7 +252,7 @@ async def get_spatial_data(
 async def get_quality_statistics(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     admin_user: Annotated[dict, Depends(require_admin)],
-    form_id: Optional[str] = None,
+    form_id: str | None = None,
 ):
     """
     Get data quality statistics for ML planning.
@@ -437,7 +439,7 @@ async def list_ml_datasets(
 async def get_temporal_trends(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     admin_user: Annotated[dict, Depends(require_admin)],
-    form_id: Optional[str] = None,
+    form_id: str | None = None,
     days: int = Query(30, ge=1, le=365, description="Number of days to retrieve"),
 ):
     """

@@ -1,39 +1,41 @@
 """User management routes."""
 
-from typing import Annotated, Optional
+from typing import Annotated, Any, cast
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel, Field, field_validator
-import asyncpg
 
-from app.core.database import get_db
-from app.core.security import hash_password, verify_password
-from app.core.logging_config import get_logger
-from app.core.validation import PasswordValidator, sanitize_string
-from app.core.responses import (
-    success_response,
-    error_response,
-    paginated_response,
-    not_found_response,
-    forbidden_response,
-)
-from app.services.users import (
-    list_users,
-    get_user_by_id,
-    update_user,
-    delete_user,
-    update_user_password,
-    get_user_preferences,
-    update_notification_preferences,
-    update_theme_preferences,
-)
-from app.services.permissions import PermissionChecker
+import asyncpg
+from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, Field, field_validator
+
 from app.api.deps import (
     get_current_user,
     get_current_user_with_password,
     require_admin,
-    require_users_read,
     require_users_admin,
+    require_users_read,
+)
+from app.core.database import get_db
+from app.core.logging_config import get_logger
+from app.core.responses import (
+    error_response,
+    forbidden_response,
+    not_found_response,
+    paginated_response,
+    success_response,
+)
+from app.core.security import hash_password, verify_password
+from app.core.validation import PasswordValidator
+from app.services.permissions import PermissionChecker
+from app.services.users import (
+    create_user,
+    delete_user,
+    get_user_by_id,
+    get_user_preferences,
+    list_users,
+    update_notification_preferences,
+    update_theme_preferences,
+    update_user,
+    update_user_password,
 )
 
 router = APIRouter(prefix="/users", tags=["User Management"])
@@ -43,23 +45,23 @@ logger = get_logger(__name__)
 class UserUpdateRequest(BaseModel):
     """User update request."""
 
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    email: Optional[str] = Field(None, max_length=255)
-    role: Optional[str] = Field(None, description="User role: 'admin' or 'agent'")
-    status: Optional[str] = Field(
+    username: str | None = Field(None, min_length=3, max_length=50)
+    email: str | None = Field(None, max_length=255)
+    role: str | None = Field(None, description="User role: 'admin' or 'agent'")
+    status: str | None = Field(
         None, description="User status: 'active', 'inactive', 'suspended'"
     )
 
     @field_validator("role")
     @classmethod
-    def validate_role(cls, v: Optional[str]) -> Optional[str]:
+    def validate_role(cls, v: str | None) -> str | None:
         if v is not None and v not in ["admin", "agent"]:
             raise ValueError("Role must be 'admin' or 'agent'")
         return v
 
     @field_validator("status")
     @classmethod
-    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+    def validate_status(cls, v: str | None) -> str | None:
         if v is not None and v not in ["active", "inactive", "suspended"]:
             raise ValueError("Status must be 'active', 'inactive', or 'suspended'")
         return v
@@ -84,25 +86,53 @@ class PasswordChangeRequest(BaseModel):
 class NotificationPreferencesRequest(BaseModel):
     """Notification preferences update request."""
 
-    email_notifications: Optional[bool] = None
-    form_assignments: Optional[bool] = None
-    responses: Optional[bool] = None
-    system_updates: Optional[bool] = None
+    email_notifications: bool | None = None
+    form_assignments: bool | None = None
+    responses: bool | None = None
+    system_updates: bool | None = None
 
 
 class ThemePreferencesRequest(BaseModel):
     """Theme preferences update request."""
 
-    theme: Optional[str] = Field(
-        None, description="Theme: 'light', 'dark', or 'system'"
-    )
-    compact_mode: Optional[bool] = None
+    theme: str | None = Field(None, description="Theme: 'light', 'dark', or 'system'")
+    compact_mode: bool | None = None
 
     @field_validator("theme")
     @classmethod
-    def validate_theme(cls, v: Optional[str]) -> Optional[str]:
+    def validate_theme(cls, v: str | None) -> str | None:
         if v is not None and v not in ["light", "dark", "system"]:
             raise ValueError("Theme must be 'light', 'dark', or 'system'")
+        return v
+
+
+class BulkUserCreateRequest(BaseModel):
+    """Bulk user creation request."""
+
+    users: list[
+        dict
+    ]  # List of user objects with username, password, role, organization_id
+    organization_id: str | None = None  # Default organization for all users
+
+    @field_validator("users")
+    @classmethod
+    def validate_users(cls, v: list[dict]) -> list[dict]:
+        """Validate bulk user data."""
+        if not v:
+            raise ValueError("Users list cannot be empty")
+
+        max_users = 100  # Limit bulk creation size
+        if len(v) > max_users:
+            raise ValueError(f"Cannot create more than {max_users} users at once")
+
+        required_fields = ["username", "password", "role"]
+        for i, user_data in enumerate(v):
+            missing_fields = [
+                field for field in required_fields if field not in user_data
+            ]
+            if missing_fields:
+                raise ValueError(f"User {i}: Missing required fields: {missing_fields}")
+
         return v
 
 
@@ -110,13 +140,11 @@ class ThemePreferencesRequest(BaseModel):
 async def get_users(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
-    role: Optional[str] = Query(None, description="Filter by role (admin, agent)"),
-    status: Optional[str] = Query(
+    role: str | None = Query(None, description="Filter by role (admin, agent)"),
+    status: str | None = Query(
         None, description="Filter by status (active, inactive, suspended)"
     ),
-    search: Optional[str] = Query(
-        None, description="Search term for username or email"
-    ),
+    search: str | None = Query(None, description="Search term for username or email"),
     sort: str = Query(
         "created_at",
         description="Sort field (created_at, username, email, role, status, last_login)",
@@ -177,9 +205,6 @@ async def get_users(
         limit=limit,
         offset=offset,
     )
-
-    # Calculate pagination info
-    total_pages = (total + limit - 1) // limit  # Ceiling division
 
     # Remove password hashes
     safe_users = [
@@ -259,7 +284,11 @@ async def update_current_user_profile(
     if not updated_user:
         not_found_response("User not found")
 
-    user_data = {k: v for k, v in updated_user.items() if k != "password_hash"}
+    user_data = {
+        k: v
+        for k, v in cast(dict[str, Any], updated_user).items()
+        if k != "password_hash"
+    }
     return success_response(data=user_data)
 
 
@@ -306,7 +335,7 @@ async def change_password(
 
 
 @router.get("/me/notifications", response_model=dict)
-async def get_notification_preferences(
+async def get_notification_preferences(  # type: ignore[misc]
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ):
@@ -335,6 +364,7 @@ async def get_notification_preferences(
         )
 
     # Return only notification preferences
+    assert preferences is not None  # MyPy type narrowing
     notification_data = {
         "email_notifications": preferences["email_notifications"],
         "form_assignments": preferences["form_assignments"],
@@ -391,7 +421,7 @@ async def update_notification_preferences_route(
 
 
 @router.get("/me/preferences", response_model=dict)
-async def get_theme_preferences(
+async def get_theme_preferences(  # type: ignore[misc]
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ):
@@ -414,6 +444,7 @@ async def get_theme_preferences(
         not_found_response("User not found")
 
     # Return only theme-related preferences
+    assert preferences is not None  # MyPy type narrowing
     theme_data = {
         "theme": preferences["theme"] if preferences["theme"] is not None else "system",
         "compact_mode": preferences["compact_mode"]
@@ -723,6 +754,106 @@ async def remove_user_role(
     return success_response(message="Role removed successfully")
 
 
+@router.post("/bulk-create", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def bulk_create_users(
+    request: BulkUserCreateRequest,
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    admin_user: Annotated[dict, Depends(require_admin)],
+):
+    """
+    Create multiple users in a single request (admin only).
+
+    **Request Body:**
+    ```json
+    {
+        "organization_id": "org_123",
+        "users": [
+            {
+                "username": "agent1",
+                "password": "SecurePass123!",
+                "role": "agent",
+                "email": "agent1@org.com"
+            },
+            {
+                "username": "agent2",
+                "password": "SecurePass456!",
+                "role": "agent",
+                "email": "agent2@org.com"
+            }
+        ]
+    }
+    ```
+
+    **Response:**
+    ```json
+    {
+        "success": true,
+        "data": {
+            "created": [
+                {"id": "usr_123", "username": "agent1"},
+                {"id": "usr_456", "username": "agent2"}
+            ],
+            "failed": [],
+            "total_requested": 2,
+            "total_created": 2,
+            "total_failed": 0
+        }
+    }
+    ```
+    """
+    created_users = []
+    failed_users = []
+
+    for i, user_data in enumerate(request.users):
+        try:
+            # Use provided organization_id or default from request
+            org_id = user_data.get("organization_id") or request.organization_id
+            if not org_id:
+                raise ValueError("organization_id is required")
+
+            # Hash password
+            password_hash = hash_password(user_data["password"])
+
+            # Create user
+            user = await create_user(
+                conn,
+                username=user_data["username"],
+                password_hash=password_hash,
+                role=user_data["role"],
+                organization_id=UUID(org_id),
+            )
+
+            if not user:
+                raise ValueError(f"Failed to create user {user_data['username']}")
+
+            created_users.append(
+                {
+                    "id": str(user["id"]),
+                    "username": user["username"],
+                    "role": user["role"],
+                }
+            )
+
+        except Exception as e:
+            failed_users.append(
+                {
+                    "index": i,
+                    "username": user_data.get("username", "unknown"),
+                    "error": str(e),
+                }
+            )
+
+    return success_response(
+        data={
+            "created": created_users,
+            "failed": failed_users,
+            "total_requested": len(request.users),
+            "total_created": len(created_users),
+            "total_failed": len(failed_users),
+        }
+    )
+
+
 @router.delete("/cleanup", response_model=dict)
 async def cleanup_deleted_users(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
@@ -763,7 +894,7 @@ async def cleanup_deleted_users(
 
 
 @router.get("/{user_id}", response_model=dict)
-async def get_user(
+async def get_user(  # type: ignore[misc]
     user_id: UUID,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
@@ -795,7 +926,9 @@ async def get_user(
     if not user:
         not_found_response("User not found")
 
-    user_data = {k: v for k, v in user.items() if k != "password_hash"}
+    user_data = {
+        k: v for k, v in cast(dict[str, Any], user).items() if k != "password_hash"
+    }
     return success_response(data=user_data)
 
 

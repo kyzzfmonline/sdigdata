@@ -1,12 +1,13 @@
 """File upload routes."""
 
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 import uuid
 
-from app.utils.spaces import generate_presigned_url, ensure_bucket_exists
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
 from app.api.deps import get_current_user
+from app.utils.spaces import ensure_bucket_exists, generate_presigned_url
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
@@ -72,5 +73,5 @@ async def get_presigned_url(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate presigned URL: {str(e)}",
+            detail=f"Failed to generate presigned URL: {e!s}",
         )

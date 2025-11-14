@@ -1,34 +1,33 @@
 """Response collection routes."""
 
-from typing import Annotated, Optional, Any
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel, field_validator, model_validator
-import asyncpg
+# type: ignore
 import sys
+from typing import Annotated, Any
+from uuid import UUID
 
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, field_validator
+
+from app.api.deps import get_current_user, require_admin, require_responses_admin
 from app.core.database import get_db
 from app.core.logging_config import get_logger
 from app.core.responses import (
-    success_response,
-    error_response,
     paginated_response,
-    not_found_response,
-    forbidden_response,
+    success_response,
 )
+from app.services.forms import get_agent_assigned_forms, get_form_by_id
+from app.services.ml_quality import calculate_and_store_quality
 from app.services.responses import (
+    aggregate_data,
+    calculate_summary_stats,
     create_response,
+    create_time_series_data,
+    delete_response,
     get_response_by_id,
     list_responses,
-    aggregate_data,
-    create_time_series_data,
     prepare_map_data,
-    calculate_summary_stats,
-    delete_response,
 )
-from app.services.forms import get_form_by_id, get_agent_assigned_forms
-from app.services.ml_quality import calculate_and_store_quality
-from app.api.deps import get_current_user, require_admin, require_responses_admin
 
 router = APIRouter(prefix="/responses", tags=["Responses"])
 logger = get_logger(__name__)
@@ -39,7 +38,7 @@ class ResponseCreate(BaseModel):
 
     form_id: str
     data: dict
-    attachments: Optional[dict] = None
+    attachments: dict | None = None
 
     @field_validator("data")
     @classmethod
@@ -76,7 +75,7 @@ class ResponseCreate(BaseModel):
 
     @field_validator("attachments")
     @classmethod
-    def validate_attachments(cls, v: Optional[dict]) -> Optional[dict]:
+    def validate_attachments(cls, v: dict | None) -> dict | None:
         """Validate attachments structure."""
         if v is None:
             return v
@@ -127,6 +126,50 @@ def _validate_attachment_urls(attachments: dict) -> bool:
         elif not isinstance(value, str):
             return False
     return True
+
+
+class BulkResponseImportRequest(BaseModel):
+    """Bulk response import request."""
+
+    form_id: str
+    responses: list[dict]  # List of response data objects
+    skip_validation: bool = False
+
+    @field_validator("responses")
+    @classmethod
+    def validate_responses(cls, v: list[dict]) -> list[dict]:
+        """Validate bulk response data."""
+        if not v:
+            raise ValueError("Responses list cannot be empty")
+
+        max_responses = 1000  # Limit bulk import size
+        if len(v) > max_responses:
+            raise ValueError(
+                f"Cannot import more than {max_responses} responses at once"
+            )
+
+        return v
+
+
+class BulkResponseDeleteRequest(BaseModel):
+    """Bulk response deletion request."""
+
+    response_ids: list[str]
+
+    @field_validator("response_ids")
+    @classmethod
+    def validate_response_ids(cls, v: list[str]) -> list[str]:
+        """Validate response IDs."""
+        if not v:
+            raise ValueError("Response IDs list cannot be empty")
+
+        max_deletions = 500  # Limit bulk delete size
+        if len(v) > max_deletions:
+            raise ValueError(
+                f"Cannot delete more than {max_deletions} responses at once"
+            )
+
+        return v
 
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -254,7 +297,7 @@ async def submit_response(
     except Exception as e:
         logger.error(
             f"Error submitting response - Form: {form_id}, "
-            f"User: {current_user['username']}: {str(e)}",
+            f"User: {current_user['username']}: {e!s}",
             exc_info=True,
         )
         raise HTTPException(
@@ -267,31 +310,31 @@ async def submit_response(
 async def list_responses_route(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
-    form_id: Optional[str] = None,
-    view: Optional[str] = Query(
+    form_id: str | None = None,
+    view: str | None = Query(
         None,
         pattern="^(table|chart|time_series|map|summary)$",
         description="View mode: table, chart, time_series, map, summary",
     ),
-    group_by: Optional[str] = Query(
+    group_by: str | None = Query(
         None, description="Field to group by for charts/aggregations"
     ),
-    aggregate: Optional[str] = Query(
+    aggregate: str | None = Query(
         None, pattern="^(count|sum|avg|min|max)$", description="Aggregation function"
     ),
-    chart_type: Optional[str] = Query(
+    chart_type: str | None = Query(
         None, pattern="^(bar|pie|line|scatter|histogram)$", description="Chart type"
     ),
-    date_field: Optional[str] = Query(
+    date_field: str | None = Query(
         "submitted_at", description="Date field for time series"
     ),
-    time_granularity: Optional[str] = Query(
+    time_granularity: str | None = Query(
         "day", pattern="^(hour|day|week|month|year)$", description="Time granularity"
     ),
-    limit: Optional[int] = Query(
+    limit: int | None = Query(
         100, ge=1, le=1000, description="Maximum records to return"
     ),
-    offset: Optional[int] = Query(0, ge=0, description="Pagination offset"),
+    offset: int | None = Query(0, ge=0, description="Pagination offset"),
 ):
     """
     List responses with optional filters and view modes.
@@ -463,13 +506,189 @@ async def list_responses_route(
         raise
     except Exception as e:
         logger.error(
-            f"Error processing view mode '{view}' for user {current_user['username']}: {str(e)}",
+            f"Error processing view mode '{view}' for user {current_user['username']}: {e!s}",
             exc_info=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while processing the {view} view. Please check your parameters and try again.",
         )
+
+
+@router.post("/bulk-import", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def bulk_import_responses(
+    request: BulkResponseImportRequest,
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Import multiple responses for a form in a single request.
+
+    **Request Body:**
+    ```json
+    {
+        "form_id": "frm_123",
+        "responses": [
+            {
+                "data": {"name": "John Doe", "age": 30},
+                "attachments": {"photo": "https://storage.example.com/photo1.jpg"}
+            },
+            {
+                "data": {"name": "Jane Smith", "age": 25},
+                "attachments": {"photo": "https://storage.example.com/photo2.jpg"}
+            }
+        ],
+        "skip_validation": false
+    }
+    ```
+
+    **Response:**
+    ```json
+    {
+        "success": true,
+        "data": {
+            "imported": [
+                {"id": "rsp_123", "data": {...}},
+                {"id": "rsp_456", "data": {...}}
+            ],
+            "failed": [],
+            "total_requested": 2,
+            "total_imported": 2,
+            "total_failed": 0
+        }
+    }
+    ```
+    """
+    form_id = UUID(request.form_id)
+
+    # Verify form exists and user has access
+    form = await get_form_by_id(conn, form_id)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+
+    # Check permissions
+    if current_user["role"] == "agent":
+        assigned_forms = await get_agent_assigned_forms(conn, current_user["id"])
+        assigned_form_ids = [str(f["id"]) for f in assigned_forms]
+        if str(form_id) not in assigned_form_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not assigned to this form",
+            )
+
+    imported_responses = []
+    failed_responses = []
+
+    for i, response_data in enumerate(request.responses):
+        try:
+            # Create response
+            response = await create_response(
+                conn,
+                form_id=form_id,
+                submitted_by=current_user["id"],
+                data=response_data.get("data", {}),
+                attachments=response_data.get("attachments"),
+            )
+
+            # Calculate quality scores
+            try:
+                await calculate_and_store_quality(
+                    conn,
+                    response_id=UUID(response["id"]),
+                    response_data=response_data.get("data", {}),
+                    attachments=response_data.get("attachments"),
+                    form_schema=form.get("schema", {}),
+                    submitted_at=response["submitted_at"],
+                )
+            except Exception as quality_error:
+                logger.warning(
+                    f"Quality calculation failed for bulk imported response {response['id']}: {quality_error}"
+                )
+
+            imported_responses.append(
+                {
+                    "id": str(response["id"]),
+                    "data": response["data"],
+                    "submitted_at": response["submitted_at"],
+                }
+            )
+
+        except Exception as e:
+            failed_responses.append(
+                {"index": i, "error": str(e), "data": response_data.get("data", {})}
+            )
+
+    return success_response(
+        data={
+            "imported": imported_responses,
+            "failed": failed_responses,
+            "total_requested": len(request.responses),
+            "total_imported": len(imported_responses),
+            "total_failed": len(failed_responses),
+        }
+    )
+
+
+@router.delete("/bulk-delete", response_model=dict)
+async def bulk_delete_responses(
+    request: BulkResponseDeleteRequest,
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    current_user: Annotated[dict, Depends(require_admin)],
+):
+    """
+    Delete multiple responses in a single request (admin only).
+
+    **Request Body:**
+    ```json
+    {
+        "response_ids": ["rsp_123", "rsp_456", "rsp_789"]
+    }
+    ```
+
+    **Response:**
+    ```json
+    {
+        "success": true,
+        "data": {
+            "deleted": ["rsp_123", "rsp_456"],
+            "not_found": ["rsp_789"],
+            "total_requested": 3,
+            "total_deleted": 2,
+            "total_not_found": 1
+        }
+    }
+    ```
+    """
+    response_uuids = [UUID(rid) for rid in request.response_ids]
+
+    deleted_ids = []
+    not_found_ids = []
+
+    for response_id in response_uuids:
+        # Check if response exists
+        response = await get_response_by_id(conn, response_id)
+        if not response:
+            not_found_ids.append(str(response_id))
+            continue
+
+        # Delete the response
+        success = await delete_response(conn, response_id)
+        if success:
+            deleted_ids.append(str(response_id))
+        else:
+            not_found_ids.append(str(response_id))
+
+    return success_response(
+        data={
+            "deleted": deleted_ids,
+            "not_found": not_found_ids,
+            "total_requested": len(request.response_ids),
+            "total_deleted": len(deleted_ids),
+            "total_not_found": len(not_found_ids),
+        }
+    )
 
 
 @router.delete("/cleanup", response_model=dict)

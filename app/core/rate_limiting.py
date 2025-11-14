@@ -1,8 +1,7 @@
 """Rate limiting for API endpoints to prevent abuse."""
 
-from typing import Dict, Optional
-from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 import threading
 
 
@@ -13,13 +12,13 @@ class RateLimiter:
     For production, consider using Redis for distributed rate limiting.
     """
 
-    def __init__(self):
-        self._attempts: Dict[str, list] = defaultdict(list)
+    def __init__(self) -> None:
+        self._attempts: dict[str, list] = defaultdict(list)
         self._lock = threading.Lock()
 
     def is_rate_limited(
         self, identifier: str, max_attempts: int, window_seconds: int
-    ) -> tuple[bool, Optional[int]]:
+    ) -> tuple[bool, int | None]:
         """
         Check if an identifier is rate limited.
 
@@ -32,7 +31,7 @@ class RateLimiter:
             Tuple of (is_limited, retry_after_seconds)
         """
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             cutoff = now - timedelta(seconds=window_seconds)
 
             # Remove old attempts
@@ -56,7 +55,7 @@ class RateLimiter:
     def record_attempt(self, identifier: str) -> None:
         """Record an attempt for the given identifier."""
         with self._lock:
-            self._attempts[identifier].append(datetime.now(timezone.utc))
+            self._attempts[identifier].append(datetime.now(UTC))
 
     def reset(self, identifier: str) -> None:
         """Reset rate limiting for an identifier (e.g., after successful login)."""
@@ -72,7 +71,7 @@ class RateLimiter:
             max_age_seconds: Remove entries older than this
         """
         with self._lock:
-            cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
+            cutoff = datetime.now(UTC) - timedelta(seconds=max_age_seconds)
             identifiers_to_remove = []
 
             for identifier, attempts in self._attempts.items():
@@ -99,15 +98,15 @@ class LoginRateLimiter:
     WINDOW_SECONDS = 300  # 5 minutes
     LOCKOUT_DURATION = 900  # 15 minutes
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.username_limiter = RateLimiter()
         self.ip_limiter = RateLimiter()
-        self._lockouts: Dict[str, datetime] = {}
+        self._lockouts: dict[str, datetime] = {}
         self._lock = threading.Lock()
 
     def check_login_allowed(
-        self, username: str, ip_address: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
+        self, username: str, ip_address: str | None = None
+    ) -> tuple[bool, str | None]:
         """
         Check if a login attempt is allowed.
 
@@ -122,9 +121,7 @@ class LoginRateLimiter:
         if self._is_locked_out(username):
             lockout_time = self._lockouts.get(username)
             if lockout_time:
-                remaining = int(
-                    (lockout_time - datetime.now(timezone.utc)).total_seconds()
-                )
+                remaining = int((lockout_time - datetime.now(UTC)).total_seconds())
                 if remaining > 0:
                     return (
                         False,
@@ -159,7 +156,7 @@ class LoginRateLimiter:
         return True, None
 
     def record_failed_attempt(
-        self, username: str, ip_address: Optional[str] = None
+        self, username: str, ip_address: str | None = None
     ) -> None:
         """Record a failed login attempt."""
         self.username_limiter.record_attempt(username)
@@ -167,7 +164,7 @@ class LoginRateLimiter:
             self.ip_limiter.record_attempt(ip_address)
 
     def record_successful_login(
-        self, username: str, ip_address: Optional[str] = None
+        self, username: str, ip_address: str | None = None
     ) -> None:
         """Reset rate limiting after successful login."""
         self.username_limiter.reset(username)
@@ -183,7 +180,7 @@ class LoginRateLimiter:
         """Check if an account is currently locked out."""
         with self._lock:
             if username in self._lockouts:
-                if datetime.now(timezone.utc) < self._lockouts[username]:
+                if datetime.now(UTC) < self._lockouts[username]:
                     return True
                 else:
                     # Lockout expired
@@ -193,7 +190,7 @@ class LoginRateLimiter:
     def _lockout_account(self, username: str) -> None:
         """Lock out an account."""
         with self._lock:
-            self._lockouts[username] = datetime.now(timezone.utc) + timedelta(
+            self._lockouts[username] = datetime.now(UTC) + timedelta(
                 seconds=self.LOCKOUT_DURATION
             )
 
@@ -207,7 +204,7 @@ class LoginRateLimiter:
             expired = [
                 username
                 for username, expiry in self._lockouts.items()
-                if datetime.now(timezone.utc) >= expiry
+                if datetime.now(UTC) >= expiry
             ]
             for username in expired:
                 del self._lockouts[username]
@@ -220,10 +217,10 @@ class AnonymousSubmissionRateLimiter:
     MAX_SUBMISSIONS_PER_IP = 10  # 10 submissions per hour
     WINDOW_SECONDS = 3600  # 1 hour
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.ip_limiter = RateLimiter()
 
-    def check_submission_allowed(self, ip_address: str) -> tuple[bool, Optional[str]]:
+    def check_submission_allowed(self, ip_address: str) -> tuple[bool, str | None]:
         """
         Check if an anonymous submission is allowed from this IP.
 

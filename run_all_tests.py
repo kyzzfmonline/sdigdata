@@ -4,9 +4,9 @@ Comprehensive test runner for SDIGdata backend.
 Runs all test suites and provides detailed reporting.
 """
 
+import os
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 
@@ -57,17 +57,11 @@ def main():
     print("Preferences, Admin Operations, and Core Functionality")
     print("=" * 60)
 
-    # Test files to run
-    test_files = [
-        ("test_auth.py", "Authentication & Registration"),
-        ("test_permissions.py", "Roles & Permissions System"),
-        ("test_user_preferences.py", "User Preferences"),
-        ("test_user_management.py", "User Management"),
-        ("test_admin_operations.py", "Admin Operations"),
-        ("test_forms.py", "Form Management"),
-        ("test_responses.py", "Response Management"),
-        ("test_organizations.py", "Organization Management"),
-        ("test_files.py", "File Management"),
+    # Test suites to run
+    test_suites = [
+        ("tests/unit/", "Unit Tests"),
+        ("tests/integration/", "Integration Tests"),
+        ("tests/security/", "Security Tests"),
     ]
 
     results = []
@@ -83,33 +77,31 @@ def main():
     if not os.environ.get("VIRTUAL_ENV"):
         print("⚠️  Warning: Virtual environment not activated")
 
-    # Run each test file
-    for test_file, description in test_files:
-        test_path = f"tests/{test_file}"
-
+    # Run each test suite
+    for test_path, description in test_suites:
         if not Path(f"/root/workspace/sdigdata/{test_path}").exists():
-            print(f"⚠️  Skipping {test_file} - file not found")
+            print(f"⚠️  Skipping {test_path} - directory not found")
             continue
 
         success = run_command(
             f"python -m pytest {test_path} -v --tb=short",
-            f"{description} ({test_file})",
+            f"{description} ({test_path})",
         )
 
-        results.append((test_file, description, success))
+        results.append((test_path, description, success))
 
         if success:
             total_passed += 1
         else:
             total_failed += 1
 
-    # Run comprehensive API test if it exists
+    # Run legacy comprehensive API test if it exists
     if Path("/root/workspace/sdigdata/test_api_comprehensive.py").exists():
         success = run_command(
             "python test_api_comprehensive.py",
-            "Comprehensive API Test (test_api_comprehensive.py)",
+            "Legacy Comprehensive API Test",
         )
-        results.append(("test_api_comprehensive.py", "Comprehensive API Test", success))
+        results.append(("test_api_comprehensive.py", "Legacy API Test", success))
 
         if success:
             total_passed += 1
@@ -135,11 +127,12 @@ def main():
     print("\n🔍 Checking test coverage...")
     try:
         coverage_success = run_command(
-            "python -m pytest --cov=app --cov-report=term-missing tests/",
+            "python -m pytest --cov=app --cov-report=term-missing --cov-report=html:htmlcov tests/",
             "Test Coverage Analysis",
         )
         if coverage_success:
             print("✅ Coverage analysis completed")
+            print("📊 HTML coverage report generated in htmlcov/")
         else:
             print("⚠️  Coverage analysis failed (pytest-cov may not be installed)")
     except:

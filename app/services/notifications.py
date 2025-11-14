@@ -1,9 +1,9 @@
 """Notification service functions."""
 
-from typing import Optional
-from uuid import UUID
-import asyncpg
 import json
+from uuid import UUID
+
+import asyncpg
 
 
 async def create_notification(
@@ -12,8 +12,8 @@ async def create_notification(
     notification_type: str,
     title: str,
     message: str,
-    data: Optional[dict] = None,
-) -> Optional[dict]:
+    data: dict | None = None,
+) -> dict | None:
     """Create a new notification."""
     result = await conn.fetchrow(
         """
@@ -27,7 +27,16 @@ async def create_notification(
         message,
         json.dumps(data) if data else None,
     )
-    return dict(result) if result else None
+    if result:
+        result_dict = dict(result)
+        if result_dict.get("data"):
+            result_dict["data"] = (
+                json.loads(result_dict["data"])
+                if isinstance(result_dict["data"], str)
+                else result_dict["data"]
+            )
+        return result_dict
+    return None
 
 
 async def get_user_notifications(

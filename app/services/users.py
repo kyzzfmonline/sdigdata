@@ -1,18 +1,19 @@
 """User service functions."""
 
-from typing import Optional
-from uuid import UUID
 from datetime import datetime
+from typing import Any
+from uuid import UUID
+
 import asyncpg
 
 
-async def create_user(
+async def create_user(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     username: str,
     password_hash: str,
     role: str,
     organization_id: UUID,
-) -> dict:
+) -> dict[str, Any] | None:
     """Create a new user."""
     result = await conn.fetchrow(
         """
@@ -28,7 +29,9 @@ async def create_user(
     return dict(result) if result else None
 
 
-async def get_user_by_id(conn: asyncpg.Connection, user_id: UUID) -> Optional[dict]:
+async def get_user_by_id(  # type: ignore[no-any-unimported]
+    conn: asyncpg.Connection, user_id: UUID
+) -> dict[str, Any] | None:
     """Get user by ID."""
     result = await conn.fetchrow(
         """
@@ -41,9 +44,9 @@ async def get_user_by_id(conn: asyncpg.Connection, user_id: UUID) -> Optional[di
     return dict(result) if result else None
 
 
-async def get_user_by_username(
+async def get_user_by_username(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection, username: str
-) -> Optional[dict]:
+) -> dict[str, Any] | None:
     """Get user by username."""
     result = await conn.fetchrow(
         """
@@ -56,17 +59,17 @@ async def get_user_by_username(
     return dict(result) if result else None
 
 
-async def list_users(
+async def list_users(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
-    organization_id: Optional[UUID] = None,
-    role: Optional[str] = None,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
+    organization_id: UUID | None = None,
+    role: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
     sort: str = "created_at",
     order: str = "desc",
     limit: int = 50,
     offset: int = 0,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict[str, Any]], int]:
     """List users with advanced filtering, sorting, and pagination."""
     # Build the main query
     query = """
@@ -75,7 +78,7 @@ async def list_users(
         WHERE deleted = FALSE
     """
     count_query = "SELECT COUNT(*) FROM users WHERE deleted = FALSE"
-    params = []
+    params: list[str | int] = []
     param_num = 1
 
     # Add filters
@@ -131,17 +134,17 @@ async def list_users(
         count_query, *params[:-2]
     )  # Remove limit/offset params
 
-    return [dict(row) for row in rows], total_count
+    return [dict(row) for row in rows], int(total_count or 0)
 
 
-async def delete_user(conn: asyncpg.Connection, user_id: UUID) -> bool:
+async def delete_user(conn: asyncpg.Connection, user_id: UUID) -> bool:  # type: ignore[no-any-unimported]
     """Delete a user."""
     result = await conn.execute("DELETE FROM users WHERE id = $1", str(user_id))
     # Extract row count from result string like "DELETE 1"
     return int(result.split()[-1]) > 0
 
 
-async def update_user_last_login(conn: asyncpg.Connection, user_id: UUID) -> None:
+async def update_user_last_login(conn: asyncpg.Connection, user_id: UUID) -> None:  # type: ignore[no-any-unimported]
     """Update user's last login timestamp."""
     await conn.execute(
         """
@@ -153,14 +156,14 @@ async def update_user_last_login(conn: asyncpg.Connection, user_id: UUID) -> Non
     )
 
 
-async def update_user(
+async def update_user(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     user_id: UUID,
-    username: Optional[str] = None,
-    email: Optional[str] = None,
-    role: Optional[str] = None,
-    status: Optional[str] = None,
-) -> Optional[dict]:
+    username: str | None = None,
+    email: str | None = None,
+    role: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any] | None:
     """Update user information."""
     updates = []
     params = []
@@ -203,7 +206,7 @@ async def update_user(
     return dict(result) if result else None
 
 
-async def update_user_password(
+async def update_user_password(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     user_id: UUID,
     password_hash: str,
@@ -222,10 +225,10 @@ async def update_user_password(
     return int(result.split()[-1]) > 0
 
 
-async def get_user_preferences(
+async def get_user_preferences(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
-    user_id,
-) -> Optional[dict]:
+    user_id: UUID,
+) -> dict[str, Any] | None:
     """Get user preferences."""
     result = await conn.fetchrow(
         """
@@ -238,17 +241,17 @@ async def get_user_preferences(
     return dict(result) if result else None
 
 
-async def update_notification_preferences(
+async def update_notification_preferences(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     user_id: UUID,
-    email_notifications: Optional[bool] = None,
-    form_assignments: Optional[bool] = None,
-    responses: Optional[bool] = None,
-    system_updates: Optional[bool] = None,
+    email_notifications: bool | None = None,
+    form_assignments: bool | None = None,
+    responses: bool | None = None,
+    system_updates: bool | None = None,
 ) -> bool:
     """Update user notification preferences."""
-    updates = []
-    params = []
+    updates: list[str] = []
+    params: list[bool | str] = []
     param_num = 1
 
     if email_notifications is not None:
@@ -288,15 +291,15 @@ async def update_notification_preferences(
     return int(result.split()[-1]) > 0
 
 
-async def update_theme_preferences(
+async def update_theme_preferences(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     user_id: UUID,
-    theme: Optional[str] = None,
-    compact_mode: Optional[bool] = None,
+    theme: str | None = None,
+    compact_mode: bool | None = None,
 ) -> bool:
     """Update user theme preferences."""
-    updates = []
-    params = []
+    updates: list[str] = []
+    params: list[str | bool] = []
     param_num = 1
 
     if theme is not None:
@@ -326,7 +329,9 @@ async def update_theme_preferences(
     return int(result.split()[-1]) > 0
 
 
-async def get_user_by_email(conn: asyncpg.Connection, email: str) -> Optional[dict]:
+async def get_user_by_email(  # type: ignore[no-any-unimported]
+    conn: asyncpg.Connection, email: str
+) -> dict[str, Any] | None:
     """Get user by email address."""
     result = await conn.fetchrow(
         """
@@ -339,13 +344,13 @@ async def get_user_by_email(conn: asyncpg.Connection, email: str) -> Optional[di
     return dict(result) if result else None
 
 
-async def create_password_reset_token(
+async def create_password_reset_token(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     user_id: UUID,
     email: str,
     token_hash: str,
     expires_at: datetime,
-) -> Optional[dict]:
+) -> dict[str, Any] | None:
     """Create a password reset token."""
     # First, mark any existing unused tokens for this user as used
     await conn.execute(
@@ -372,10 +377,10 @@ async def create_password_reset_token(
     return dict(result) if result else None
 
 
-async def get_password_reset_token(
+async def get_password_reset_token(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     token_hash: str,
-) -> Optional[dict]:
+) -> dict[str, Any] | None:
     """Get password reset token by hash."""
     result = await conn.fetchrow(
         """
@@ -388,7 +393,7 @@ async def get_password_reset_token(
     return dict(result) if result else None
 
 
-async def mark_token_used(
+async def mark_token_used(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     token_id: UUID,
 ) -> bool:
@@ -405,7 +410,7 @@ async def mark_token_used(
     return int(result.split()[-1]) > 0
 
 
-async def cleanup_expired_tokens(conn: asyncpg.Connection) -> int:
+async def cleanup_expired_tokens(conn: asyncpg.Connection) -> int:  # type: ignore[no-any-unimported]
     """Clean up expired password reset tokens."""
     result = await conn.execute(
         """

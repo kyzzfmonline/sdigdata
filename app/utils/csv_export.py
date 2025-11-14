@@ -2,10 +2,10 @@
 
 import csv
 import io
-from typing import List, Dict, Any
+from typing import Any
 
 
-def flatten_response_data(data: dict, prefix: str = "") -> dict:
+def flatten_response_data(data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     """
     Flatten nested JSON data for CSV export.
 
@@ -31,7 +31,9 @@ def flatten_response_data(data: dict, prefix: str = "") -> dict:
     return flattened
 
 
-def responses_to_csv(responses: List[Dict[str, Any]], form_schema: dict) -> str:
+def responses_to_csv(
+    responses: list[dict[str, Any]], form_schema: dict[str, Any]
+) -> str:
     """
     Convert form responses to CSV format.
 
@@ -50,7 +52,7 @@ def responses_to_csv(responses: List[Dict[str, Any]], form_schema: dict) -> str:
 
     # Flatten all response data
     flattened_responses = []
-    all_keys = set()
+    all_keys: set[str] = set()
 
     for response in responses:
         # Add metadata fields

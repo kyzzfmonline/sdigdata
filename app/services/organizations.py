@@ -1,16 +1,17 @@
 """Organization service functions."""
 
-from typing import Optional
+from typing import Any
 from uuid import UUID
+
 import asyncpg
 
 
-async def create_organization(
+async def create_organization(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     name: str,
-    logo_url: Optional[str] = None,
-    primary_color: Optional[str] = None,
-) -> dict:
+    logo_url: str | None = None,
+    primary_color: str | None = None,
+) -> dict[str, Any] | None:
     """Create a new organization."""
     result = await conn.fetchrow(
         """
@@ -18,12 +19,16 @@ async def create_organization(
         VALUES ($1, $2, $3)
         RETURNING id, name, logo_url, primary_color, created_at
         """,
-        name, logo_url, primary_color,
+        name,
+        logo_url,
+        primary_color,
     )
     return dict(result) if result else None
 
 
-async def get_organization_by_id(conn: asyncpg.Connection, org_id: UUID) -> Optional[dict]:
+async def get_organization_by_id(  # type: ignore[no-any-unimported]
+    conn: asyncpg.Connection, org_id: UUID
+) -> dict[str, Any] | None:
     """Get organization by ID."""
     result = await conn.fetchrow(
         """
@@ -36,7 +41,7 @@ async def get_organization_by_id(conn: asyncpg.Connection, org_id: UUID) -> Opti
     return dict(result) if result else None
 
 
-async def get_first_organization(conn: asyncpg.Connection) -> Optional[dict]:
+async def get_first_organization(conn: asyncpg.Connection) -> dict[str, Any] | None:  # type: ignore[no-any-unimported]
     """Get the first organization (useful for bootstrap)."""
     result = await conn.fetchrow(
         """
@@ -49,7 +54,7 @@ async def get_first_organization(conn: asyncpg.Connection) -> Optional[dict]:
     return dict(result) if result else None
 
 
-async def list_organizations(conn: asyncpg.Connection) -> list[dict]:
+async def list_organizations(conn: asyncpg.Connection) -> list[dict[str, Any]]:  # type: ignore[no-any-unimported]
     """List all organizations."""
     results = await conn.fetch(
         """
@@ -61,13 +66,13 @@ async def list_organizations(conn: asyncpg.Connection) -> list[dict]:
     return [dict(row) for row in results]
 
 
-async def update_organization(
+async def update_organization(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     org_id: UUID,
-    name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    primary_color: Optional[str] = None,
-) -> Optional[dict]:
+    name: str | None = None,
+    logo_url: str | None = None,
+    primary_color: str | None = None,
+) -> dict[str, Any] | None:
     """Update organization details."""
     updates = []
     params = []
@@ -93,7 +98,7 @@ async def update_organization(
 
     query = f"""
         UPDATE organizations
-        SET {', '.join(updates)}
+        SET {", ".join(updates)}
         WHERE id = ${param_num}
         RETURNING id, name, logo_url, primary_color, created_at
     """

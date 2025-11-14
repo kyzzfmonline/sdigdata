@@ -1,14 +1,13 @@
 """Email service for sending password reset and other emails."""
 
+import asyncio
+from datetime import datetime, timedelta, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import hashlib
+import secrets
 import smtplib
 import ssl
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Optional
-import asyncio
-from datetime import datetime, timedelta
-import secrets
-import hashlib
 
 from app.core.config import get_settings
 from app.core.logging_config import get_logger
@@ -20,7 +19,7 @@ settings = get_settings()
 class EmailService:
     """Service for sending emails via SMTP."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.smtp_server = settings.SMTP_SERVER
         self.smtp_port = settings.SMTP_PORT
         self.smtp_username = settings.SMTP_USERNAME
@@ -106,7 +105,7 @@ class EmailService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send password reset email to {to_email}: {str(e)}")
+            logger.error(f"Failed to send password reset email to {to_email}: {e!s}")
             return False
 
     def _send_email_sync(self, email_content: str) -> None:
@@ -133,7 +132,7 @@ class EmailService:
             server.quit()
 
         except Exception as e:
-            logger.error(f"SMTP error: {str(e)}")
+            logger.error(f"SMTP error: {e!s}")
             raise
 
     def _get_frontend_url(self) -> str:
@@ -158,7 +157,7 @@ class EmailService:
     @staticmethod
     def get_token_expiry() -> datetime:
         """Get token expiry datetime."""
-        return datetime.utcnow() + timedelta(
+        return datetime.now(timezone(timedelta(0))) + timedelta(
             hours=settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS
         )
 

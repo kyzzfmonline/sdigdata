@@ -12,11 +12,12 @@ It's significantly more secure than bcrypt/scrypt and provides better protection
 - Memory-hardness attacks
 """
 
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
 from argon2 import PasswordHasher, Type
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from app.core.config import settings
 from app.core.logging_config import get_logger
@@ -26,12 +27,12 @@ logger = get_logger(__name__)
 # Initialize Argon2id with secure parameters
 # Argon2id is the hybrid version combining Argon2i and Argon2d
 ph = PasswordHasher(
-    time_cost=3,        # Number of iterations (recommended: 3-4 for 2024)
+    time_cost=3,  # Number of iterations (recommended: 3-4 for 2024)
     memory_cost=65536,  # Memory usage in KiB (64 MB - good balance)
-    parallelism=4,      # Number of parallel threads
-    hash_len=32,        # Length of the hash in bytes
-    salt_len=16,        # Length of the salt in bytes
-    type=Type.ID,       # Argon2id (hybrid version - most secure)
+    parallelism=4,  # Number of parallel threads
+    hash_len=32,  # Length of the hash in bytes
+    salt_len=16,  # Length of the salt in bytes
+    type=Type.ID,  # Argon2id (hybrid version - most secure)
 )
 
 
@@ -82,7 +83,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict, expires_delta: timedelta | None = None
+) -> str | bytes:
     """
     Create a JWT access token.
 
@@ -96,9 +99,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
+        expire = datetime.now(UTC) + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
@@ -109,7 +112,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict[str, Any] | None:
     """
     Decode and verify a JWT access token.
 

@@ -1,10 +1,9 @@
 """Structured logging configuration for the application."""
 
+from datetime import UTC, datetime
+import json
 import logging
 import sys
-from typing import Any, Optional
-from datetime import datetime, timezone
-import json
 
 from app.core.config import settings
 
@@ -15,7 +14,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
         log_data = {
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat() + "Z",
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -38,9 +37,9 @@ class JSONFormatter(logging.Formatter):
 class StandardFormatter(logging.Formatter):
     """Human-readable formatter for development."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            fmt="%(asctime)s - %(name)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
@@ -88,16 +87,16 @@ def get_logger(name: str) -> logging.Logger:
 class SecurityLogger:
     """Specialized logger for security events."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = get_logger("security")
 
     def log_login_attempt(
         self,
         username: str,
         success: bool,
-        ip_address: Optional[str] = "",
-        user_agent: Optional[str] = "",
-        reason: Optional[str] = "",
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        reason: str | None = None,
     ) -> None:
         """Log a login attempt."""
         extra_fields = {
@@ -134,9 +133,9 @@ class SecurityLogger:
     def log_unauthorized_access(
         self,
         resource: str,
-        user_id: str = None,
-        ip_address: str = None,
-        reason: str = None,
+        user_id: str | None = None,
+        ip_address: str | None = None,
+        reason: str | None = None,
     ) -> None:
         """Log unauthorized access attempt."""
         self.logger.warning(
@@ -165,7 +164,7 @@ class SecurityLogger:
             },
         )
 
-    def log_password_change(self, user_id: str, ip_address: str = None) -> None:
+    def log_password_change(self, user_id: str, ip_address: str | None = None) -> None:
         """Log password change."""
         self.logger.info(
             f"Password changed for user: {user_id}",

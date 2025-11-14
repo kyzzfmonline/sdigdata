@@ -1,8 +1,8 @@
 """Analytics service functions."""
 
-from typing import Optional
-from uuid import UUID
 from datetime import datetime, timedelta
+from uuid import UUID
+
 import asyncpg
 
 
@@ -33,21 +33,9 @@ async def get_dashboard_stats(conn: asyncpg.Connection, period: str = "7d") -> d
         "SELECT COUNT(*) FROM forms WHERE status = 'published' AND deleted = FALSE"
     )
 
-    # Forms created in period
-    period_forms = await conn.fetchval(
-        "SELECT COUNT(*) FROM forms WHERE created_at >= $1 AND deleted = FALSE",
-        start_date,
-    )
-
     # Total responses
     total_responses = await conn.fetchval(
         "SELECT COUNT(*) FROM responses WHERE deleted = FALSE"
-    )
-
-    # Responses in period
-    period_responses = await conn.fetchval(
-        "SELECT COUNT(*) FROM responses WHERE submitted_at >= $1 AND deleted = FALSE",
-        start_date,
     )
 
     # Total agents
@@ -115,7 +103,7 @@ async def get_dashboard_stats(conn: asyncpg.Connection, period: str = "7d") -> d
             prev_completion_data["complete"] / prev_completion_data["total"]
         ) * 100
 
-    completion_trend = 0
+    completion_trend = 0.0
     if prev_completion_rate > 0:
         completion_trend = (
             (avg_completion_rate - prev_completion_rate) / prev_completion_rate
@@ -206,12 +194,46 @@ async def get_dashboard_stats(conn: asyncpg.Connection, period: str = "7d") -> d
         for row in recent_activity_rows
     ]
 
-    # Performance metrics (placeholder values - would need actual system monitoring)
+    # Performance metrics (calculate from actual data)
+    # Calculate average response time
+    avg_response_time_data = await conn.fetchval(
+        """
+        SELECT AVG(EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as avg_hours
+        FROM responses r
+        JOIN forms f ON r.form_id = f.id
+        WHERE r.deleted = FALSE AND f.deleted = FALSE
+        """,
+    )
+    avg_response_time = round(float(avg_response_time_data or 0), 1)
+
+    # Calculate data quality score based on completeness and consistency
+    quality_data = await conn.fetchrow(
+        """
+        SELECT
+            AVG(CASE WHEN rq.completeness_score IS NOT NULL THEN rq.completeness_score ELSE 0 END) as avg_completeness,
+            AVG(CASE WHEN rq.consistency_score IS NOT NULL THEN rq.consistency_score ELSE 0 END) as avg_consistency,
+            AVG(CASE WHEN rq.overall_score IS NOT NULL THEN rq.overall_score ELSE 0 END) as avg_quality
+        FROM responses r
+        LEFT JOIN response_quality rq ON r.id = rq.response_id
+        WHERE r.deleted = FALSE
+        """,
+    )
+
+    data_quality_score = 0.0
+    if quality_data and quality_data["avg_quality"]:
+        data_quality_score = round(float(quality_data["avg_quality"]) * 100, 1)
+    elif quality_data and quality_data["avg_completeness"]:
+        # Fallback to completeness if no quality scores
+        data_quality_score = round(float(quality_data["avg_completeness"]), 1)
+
+    # User satisfaction (placeholder - would need actual feedback system)
+    user_satisfaction = 4.6  # Keep placeholder for now
+
     performance_metrics = {
-        "avg_response_time": 4.2,
+        "avg_response_time": avg_response_time,
         "form_completion_rate": avg_completion_rate,
-        "user_satisfaction": 4.6,  # Placeholder
-        "data_quality_score": 94.2,  # Placeholder
+        "user_satisfaction": user_satisfaction,
+        "data_quality_score": data_quality_score,
     }
 
     return {
@@ -257,17 +279,59 @@ async def get_form_analytics(conn: asyncpg.Connection, form_id: UUID) -> dict:
             (completion_data["complete"] / completion_data["total"]) * 100
         )
 
-    # Average completion time (placeholder - would need actual timing data)
-    avg_completion_time = 6.8
+    # Average completion time (calculate from form creation to submission)
+    avg_completion_time_data = await conn.fetchval(
+        """
+        SELECT
+            AVG(EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as avg_hours
+        FROM responses r
+        JOIN forms f ON r.form_id = f.id
+        WHERE r.form_id = $1 AND r.deleted = FALSE AND f.deleted = FALSE
+        """,
+        str(form_id),
+    )
+    avg_completion_time = (
+        round(float(avg_completion_time_data), 1) if avg_completion_time_data else 0.0
+    )
 
-    # Drop-off points (placeholder - would need step-by-step completion tracking)
-    drop_off_points = [
-        {"step": 3, "drop_off_rate": 15.2},
-        {"step": 7, "drop_off_rate": 8.7},
-    ]
+    # Drop-off points (simplified - based on response timing patterns)
+    # For now, calculate based on response distribution over time
+    drop_off_analysis = await conn.fetch(
+        """
+        SELECT
+            COUNT(*) as total_responses,
+            COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (submitted_at - created_at))/3600 < 1) as fast_responses,
+            COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (submitted_at - created_at))/3600 BETWEEN 1 AND 24) as medium_responses,
+            COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (submitted_at - created_at))/3600 > 24) as slow_responses
+        FROM responses r
+        JOIN forms f ON r.form_id = f.id
+        WHERE r.form_id = $1 AND r.deleted = FALSE AND f.deleted = FALSE
+        """,
+        str(form_id),
+    )
+
+    drop_off_points = []
+    if drop_off_analysis:
+        row = drop_off_analysis[0]
+        total = row["total_responses"]
+        if total > 0:
+            drop_off_points = [
+                {
+                    "step": 1,
+                    "drop_off_rate": round((row["fast_responses"] / total) * 100, 1),
+                },
+                {
+                    "step": 2,
+                    "drop_off_rate": round((row["medium_responses"] / total) * 100, 1),
+                },
+                {
+                    "step": 3,
+                    "drop_off_rate": round((row["slow_responses"] / total) * 100, 1),
+                },
+            ]
 
     # Response distribution
-    response_distribution = {
+    response_distribution: dict[str, list] = {
         "daily": [],  # Would need daily aggregation
         "weekly": [],  # Would need weekly aggregation
         "monthly": [],  # Would need monthly aggregation
@@ -291,16 +355,60 @@ async def get_form_analytics(conn: asyncpg.Connection, form_id: UUID) -> dict:
         for row in response_trend_rows
     ]
 
-    # Demographics (placeholder - would need actual demographic data collection)
+    # Demographics (basic aggregations from response data)
+    # Age groups (if age field exists in responses)
+    age_distribution = await conn.fetch(
+        """
+        SELECT
+            CASE
+                WHEN (data->>'age')::int < 25 THEN '18-24'
+                WHEN (data->>'age')::int < 35 THEN '25-34'
+                WHEN (data->>'age')::int < 45 THEN '35-44'
+                WHEN (data->>'age')::int < 55 THEN '45-54'
+                ELSE '55+'
+            END as age_group,
+            COUNT(*) as count
+        FROM responses
+        WHERE form_id = $1 AND deleted = FALSE AND data->>'age' IS NOT NULL
+        GROUP BY age_group
+        """,
+        str(form_id),
+    )
+
+    age_groups = {}
+    for row in age_distribution:
+        age_groups[row["age_group"]] = row["count"]
+
+    # Default age groups if no data
+    if not age_groups:
+        age_groups = {"18-24": 0, "25-34": 0, "35-44": 0, "45-54": 0, "55+": 0}
+
+    # Locations (if location field exists)
+    location_distribution = await conn.fetch(
+        """
+        SELECT
+            COALESCE(data->'location'->>'district', 'unknown') as district,
+            COUNT(*) as count
+        FROM responses
+        WHERE form_id = $1 AND deleted = FALSE
+        GROUP BY district
+        ORDER BY count DESC
+        LIMIT 4
+        """,
+        str(form_id),
+    )
+
+    locations = {}
+    for row in location_distribution:
+        locations[row["district"]] = row["count"]
+
+    # Devices (placeholder - would need device tracking)
+    devices = {"mobile": 68, "desktop": 32}  # Keep placeholder for now
+
     demographics = {
-        "age_groups": {"18-24": 25, "25-34": 35, "35-44": 20, "45-54": 12, "55+": 8},
-        "locations": {
-            "district_a": 120,
-            "district_b": 98,
-            "district_c": 76,
-            "district_d": 54,
-        },
-        "devices": {"mobile": 68, "desktop": 32},
+        "age_groups": age_groups,
+        "locations": locations,
+        "devices": devices,
     }
 
     # Top agents
@@ -455,8 +563,31 @@ async def get_performance_metrics(
     days = period_days.get(period, 30)
     start_date = datetime.now() - timedelta(days=days)
 
-    # Response times (placeholder - would need actual timing data)
-    response_times = {"avg": 4.2, "p50": 3.8, "p95": 12.5, "p99": 25.3}
+    # Response times (calculate from form creation to submission)
+    response_times_data = await conn.fetch(
+        """
+        SELECT
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as p50,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as p95,
+            percentile_cont(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as p99,
+            AVG(EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as avg
+        FROM responses r
+        JOIN forms f ON r.form_id = f.id
+        WHERE r.submitted_at >= $1 AND r.deleted = FALSE AND f.deleted = FALSE
+        """,
+        start_date,
+    )
+
+    if response_times_data:
+        row = response_times_data[0]
+        response_times = {
+            "avg": round(float(row["avg"] or 0), 1),
+            "p50": round(float(row["p50"] or 0), 1),
+            "p95": round(float(row["p95"] or 0), 1),
+            "p99": round(float(row["p99"] or 0), 1),
+        }
+    else:
+        response_times = {"avg": 0.0, "p50": 0.0, "p95": 0.0, "p99": 0.0}
 
     # Completion rates
     completion_data = await conn.fetchrow(
@@ -506,12 +637,66 @@ async def get_performance_metrics(
         else:
             completion_by_dept[row["department"]] = 0
 
-    # User engagement (placeholder metrics)
-    user_engagement = {
-        "avg_session_duration": 8.5,
-        "bounce_rate": 12.3,
-        "return_visitors": 68.4,
-    }
+    # User engagement (calculate from response patterns)
+    engagement_data = await conn.fetchrow(
+        """
+        SELECT
+            COUNT(DISTINCT r.submitted_by) as unique_users,
+            COUNT(r.id) as total_responses,
+            AVG(EXTRACT(EPOCH FROM (r.submitted_at - f.created_at))/3600) as avg_engagement_time,
+            COUNT(DISTINCT CASE WHEN r.submitted_by IN (
+                SELECT DISTINCT submitted_by FROM responses
+                WHERE submitted_at >= $1 - INTERVAL '30 days' AND submitted_at < $1
+            ) THEN r.submitted_by END) as return_users
+        FROM responses r
+        JOIN forms f ON r.form_id = f.id
+        WHERE r.submitted_at >= $1 AND r.deleted = FALSE AND f.deleted = FALSE
+        """,
+        start_date,
+    )
+
+    if engagement_data:
+        unique_users = engagement_data["unique_users"] or 0
+        return_users = engagement_data["return_users"] or 0
+
+        # Calculate bounce rate (users with only 1 response)
+        bounce_users = await conn.fetchval(
+            """
+            SELECT COUNT(*) FROM (
+                SELECT submitted_by, COUNT(*) as response_count
+                FROM responses
+                WHERE submitted_at >= $1 AND deleted = FALSE
+                GROUP BY submitted_by
+                HAVING COUNT(*) = 1
+            ) as single_response_users
+            """,
+            start_date,
+        )
+
+        bounce_rate = (
+            (bounce_users / unique_users * 100)
+            if unique_users and unique_users > 0
+            else 0
+        )
+        return_visitor_rate = (
+            (return_users / unique_users * 100)
+            if unique_users and unique_users > 0
+            else 0
+        )
+
+        user_engagement = {
+            "avg_session_duration": round(
+                float(engagement_data["avg_engagement_time"] or 0), 1
+            ),
+            "bounce_rate": round(bounce_rate, 1),
+            "return_visitors": round(return_visitor_rate, 1),
+        }
+    else:
+        user_engagement = {
+            "avg_session_duration": 0.0,
+            "bounce_rate": 0.0,
+            "return_visitors": 0.0,
+        }
 
     # Trends data
     daily_responses = await conn.fetch(

@@ -1,20 +1,21 @@
 """Organization management routes."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
+
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-import asyncpg
 
+from app.api.deps import get_current_user, require_admin
 from app.core.database import get_db
-from app.core.responses import success_response, not_found_response
+from app.core.responses import not_found_response, success_response
 from app.services.organizations import (
     create_organization,
     get_organization_by_id,
     list_organizations,
     update_organization,
 )
-from app.api.deps import require_admin, get_current_user
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 
@@ -23,16 +24,16 @@ class OrganizationCreate(BaseModel):
     """Organization creation request."""
 
     name: str
-    logo_url: Optional[str] = None
-    primary_color: Optional[str] = None
+    logo_url: str | None = None
+    primary_color: str | None = None
 
 
 class OrganizationUpdate(BaseModel):
     """Organization update request."""
 
-    name: Optional[str] = None
-    logo_url: Optional[str] = None
-    primary_color: Optional[str] = None
+    name: str | None = None
+    logo_url: str | None = None
+    primary_color: str | None = None
 
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -59,6 +60,11 @@ async def create_org(
         logo_url=request.logo_url,
         primary_color=request.primary_color,
     )
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create organization",
+        )
     return success_response(data=org)
 
 
