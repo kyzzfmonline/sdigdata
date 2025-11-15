@@ -14,15 +14,18 @@ async def acquire_lock(
     timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     """Acquire an exclusive lock on a form for editing."""
-    # Check if form is already locked
-    existing_lock = await conn.fetchrow(
-        """
-        SELECT locked_by, locked_at, lock_version
-        FROM forms
-        WHERE id = $1 AND locked_by IS NOT NULL
-        """,
-        str(form_id),
-    )
+    try:
+        # Check if form is already locked
+        existing_lock = await conn.fetchrow(
+            """
+            SELECT locked_by, locked_at, lock_version
+            FROM forms
+            WHERE id = $1 AND locked_by IS NOT NULL
+            """,
+            form_id,
+        )
+    except Exception as e:
+        return {"lock_acquired": False, "error": f"Database error: {str(e)}"}
 
     if existing_lock:
         # Check if lock has expired
@@ -40,90 +43,102 @@ async def acquire_lock(
                 }
 
     # Acquire or renew lock
-    result = await conn.fetchrow(
-        """
-        UPDATE forms
-        SET locked_by = $1, locked_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-        RETURNING lock_version, locked_at
-        """,
-        str(user_id),
-        str(form_id),
-    )
+    try:
+        result = await conn.fetchrow(
+            """
+            UPDATE forms
+            SET locked_by = $1, locked_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING lock_version, locked_at
+            """,
+            user_id,
+            form_id,
+        )
 
-    if result:
-        lock_expires_at = result["locked_at"] + timedelta(seconds=timeout_seconds)
-        return {
-            "lock_acquired": True,
-            "lock_expires_at": lock_expires_at,
-            "lock_version": result["lock_version"],
-        }
+        if result:
+            lock_expires_at = result["locked_at"] + timedelta(seconds=timeout_seconds)
+            return {
+                "lock_acquired": True,
+                "lock_expires_at": lock_expires_at,
+                "lock_version": result["lock_version"],
+            }
 
-    return {"lock_acquired": False, "error": "Failed to acquire lock"}
+        return {"lock_acquired": False, "error": "Form not found"}
+    except Exception as e:
+        return {"lock_acquired": False, "error": f"Failed to acquire lock: {str(e)}"}
 
 
 async def release_lock(
     conn: asyncpg.Connection, form_id: UUID, user_id: UUID
 ) -> bool:
     """Release a lock on a form."""
-    result = await conn.execute(
-        """
-        UPDATE forms
-        SET locked_by = NULL, locked_at = NULL
-        WHERE id = $1 AND locked_by = $2
-        """,
-        str(form_id),
-        str(user_id),
-    )
-    return int(result.split()[-1]) > 0
+    try:
+        result = await conn.execute(
+            """
+            UPDATE forms
+            SET locked_by = NULL, locked_at = NULL
+            WHERE id = $1 AND locked_by = $2
+            """,
+            form_id,
+            user_id,
+        )
+        return int(result.split()[-1]) > 0
+    except Exception:
+        return False
 
 
 async def force_release_lock(conn: asyncpg.Connection, form_id: UUID) -> bool:
     """Force release a lock (admin only)."""
-    result = await conn.execute(
-        """
-        UPDATE forms
-        SET locked_by = NULL, locked_at = NULL
-        WHERE id = $1
-        """,
-        str(form_id),
-    )
-    return int(result.split()[-1]) > 0
+    try:
+        result = await conn.execute(
+            """
+            UPDATE forms
+            SET locked_by = NULL, locked_at = NULL
+            WHERE id = $1
+            """,
+            form_id,
+        )
+        return int(result.split()[-1]) > 0
+    except Exception:
+        return False
 
 
 async def get_lock_status(
     conn: asyncpg.Connection, form_id: UUID
 ) -> dict[str, Any]:
     """Get the lock status of a form."""
-    result = await conn.fetchrow(
-        """
-        SELECT f.locked_by, f.locked_at, f.lock_version,
-               u.username, u.email
-        FROM forms f
-        LEFT JOIN users u ON f.locked_by = u.id
-        WHERE f.id = $1
-        """,
-        str(form_id),
-    )
+    try:
+        result = await conn.fetchrow(
+            """
+            SELECT f.locked_by, f.locked_at, f.lock_version,
+                   u.username, u.email
+            FROM forms f
+            LEFT JOIN users u ON f.locked_by = u.id::text
+            WHERE f.id = $1
+            """,
+            form_id,
+        )
 
-    if not result:
-        return {"error": "Form not found"}
+        if not result:
+            return {"error": "Form not found"}
 
-    if result["locked_by"]:
-        # Default timeout is 5 minutes
-        lock_expires_at = result["locked_at"] + timedelta(seconds=300)
-        return {
-            "is_locked": True,
-            "locked_by": {
-                "id": result["locked_by"],
-                "username": result["username"],
-                "email": result["email"],
-            },
-            "locked_at": result["locked_at"],
-            "lock_expires_at": lock_expires_at,
-        }
+        if result["locked_by"]:
+            # Default timeout is 5 minutes
+            lock_expires_at = result["locked_at"] + timedelta(seconds=300)
+            return {
+                "is_locked": True,
+                "locked_by": {
+                    "id": result["locked_by"],
+                    "username": result["username"],
+                    "email": result["email"],
+                },
+                "locked_at": result["locked_at"],
+                "lock_expires_at": lock_expires_at,
+            }
 
-    return {"is_locked": False}
+        return {"is_locked": False}
+    except Exception as e:
+        return {"error": f"Failed to get lock status: {str(e)}"}
 
 
 async def increment_lock_version(conn: asyncpg.Connection, form_id: UUID) -> int:

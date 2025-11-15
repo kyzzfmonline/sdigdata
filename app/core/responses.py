@@ -1,10 +1,26 @@
 """Standardized API response utilities."""
 
+import json
+from datetime import date, datetime
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles UUID, datetime, and other types."""
+
+    def default(self, obj):
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, bytes):
+            return obj.decode('utf-8')
+        return super().default(obj)
 
 
 class APIResponse(BaseModel):
@@ -55,7 +71,9 @@ def error_response_dict(
     error_dict: dict[str, Any], status_code: int = status.HTTP_400_BAD_REQUEST
 ) -> JSONResponse:
     """Create an error response as a JSONResponse (for exception handlers)."""
-    return JSONResponse(status_code=status_code, content=error_dict)
+    # Serialize with custom encoder to handle UUID, datetime, etc.
+    content = json.loads(json.dumps(error_dict, cls=CustomJSONEncoder))
+    return JSONResponse(status_code=status_code, content=content)
 
 
 def paginated_response(

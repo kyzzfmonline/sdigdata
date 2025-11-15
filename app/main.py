@@ -271,12 +271,15 @@ async def general_exception_handler(request: Request, exc: Exception):
     from app.core.responses import error_response_dict
 
     logger.error(f"Unexpected error: {exc}", exc_info=True)
+    logger.error(f"Request path: {request.url.path}")
+    logger.error(f"Request method: {request.method}")
+
     return error_response_dict(
         {
             "success": False,
             "message": "An unexpected error occurred",
             "data": None,
-            "errors": None,
+            "errors": {"detail": str(exc) if settings.ENVIRONMENT == "development" else None},
         },
         500,
     )
