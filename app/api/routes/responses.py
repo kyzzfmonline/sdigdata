@@ -311,6 +311,10 @@ async def list_responses_route(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
     form_id: str | None = None,
+    submitted_by: str | None = Query(
+        None,
+        description="Filter by user who submitted responses. Use 'me' for your own responses, or a user ID (admin only)"
+    ),
     view: str | None = Query(
         None,
         pattern="^(table|chart|time_series|map|summary)$",
@@ -341,6 +345,7 @@ async def list_responses_route(
 
     **Query Parameters:**
     - form_id: Filter by form
+    - submitted_by: Filter by user who submitted responses (use 'me' for your own, or user ID for admin)
     - view: View mode (table, chart, time_series, map, summary)
     - group_by: Field to group by for aggregations
     - aggregate: Aggregation function (count, sum, avg, min, max)
@@ -409,8 +414,43 @@ async def list_responses_route(
     actual_limit = limit if limit is not None else 100
     actual_offset = offset if offset is not None else 0
 
+    # Handle submitted_by parameter
+    parsed_submitted_by = None
+    if submitted_by:
+        if submitted_by == "me":
+            # User wants their own responses
+            # current_user["id"] might already be a UUID object from asyncpg
+            if isinstance(current_user["id"], str):
+                parsed_submitted_by = UUID(current_user["id"])
+            else:
+                parsed_submitted_by = current_user["id"]
+        else:
+            # Trying to view another user's responses - requires responses:read permission
+            from app.services.permissions import PermissionChecker
+            checker = PermissionChecker(conn)
+            has_permission = await checker.has_permission(
+                UUID(current_user["id"]), "responses", "read"
+            )
+            if not has_permission:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own responses. Use submitted_by=me or contact an administrator."
+                )
+            try:
+                parsed_submitted_by = UUID(submitted_by)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid submitted_by format. Must be 'me' or a valid UUID"
+                )
+
     # Get raw responses data
-    if current_user["role"] == "agent":
+    if parsed_submitted_by:
+        # Explicit submitted_by parameter takes precedence
+        raw_responses = await list_responses(
+            conn, form_id=parsed_form_id, submitted_by=parsed_submitted_by
+        )
+    elif current_user["role"] == "agent":
         # Agents can see their own authenticated responses AND anonymous responses from forms they're assigned to
         if parsed_form_id:
             # Check if agent is assigned to this specific form

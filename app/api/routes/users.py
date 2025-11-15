@@ -638,6 +638,136 @@ async def get_my_permissions(
     return success_response(data={"permissions": permissions, "roles": roles})
 
 
+@router.get("/me/responses")
+async def get_my_responses(
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+    form_id: str | None = Query(None, description="Filter by form ID"),
+    status: str | None = Query(None, description="Filter by status (draft, submitted, reviewed)"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum records to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    sort_by: str = Query("submitted_at", description="Field to sort by"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
+):
+    """
+    Get responses submitted by the current authenticated user.
+
+    This endpoint allows any authenticated user to view their own form submissions.
+    No special permissions required - users can always view their own data.
+
+    **Query Parameters:**
+    - form_id: Filter responses by specific form (optional)
+    - status: Filter by submission status (optional)
+    - limit: Number of responses per page (1-100, default: 20)
+    - offset: Pagination offset (default: 0)
+    - sort_by: Field to sort by (default: submitted_at)
+    - sort_order: Sort direction - asc or desc (default: desc)
+
+    **Response:**
+    ```json
+    {
+        "success": true,
+        "data": {
+            "responses": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "form_id": "...",
+                    "data": {...},
+                    "submitted_at": "2025-11-15T10:30:00Z",
+                    "status": "submitted"
+                }
+            ],
+            "pagination": {
+                "page": 1,
+                "limit": 20,
+                "total": 45,
+                "total_pages": 3
+            }
+        }
+    }
+    ```
+    """
+    from app.services.responses import list_responses
+
+    # Parse form_id if provided
+    parsed_form_id = None
+    if form_id:
+        try:
+            parsed_form_id = UUID(form_id)
+        except ValueError:
+            raise error_response(
+                message="Invalid form_id format. Must be a valid UUID",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+    # Get user's responses
+    # current_user["id"] might already be a UUID object from asyncpg
+    if isinstance(current_user["id"], str):
+        user_id = UUID(current_user["id"])
+    else:
+        user_id = current_user["id"]
+    all_responses_raw = await list_responses(
+        conn,
+        form_id=parsed_form_id,
+        submitted_by=user_id
+    )
+
+    # Ensure all UUIDs are converted to strings
+    all_responses = []
+    for resp in all_responses_raw:
+        # Deep copy and ensure all values are JSON-serializable
+        clean_resp = {}
+        for k, v in resp.items():
+            if v is None:
+                clean_resp[k] = None
+            elif hasattr(v, '__class__') and 'UUID' in v.__class__.__name__:
+                clean_resp[k] = str(v)
+            else:
+                clean_resp[k] = v
+        all_responses.append(clean_resp)
+
+    # Filter by status if provided
+    if status:
+        all_responses = [r for r in all_responses if r.get("status") == status]
+
+    # Sort responses
+    reverse = (sort_order == "desc")
+    try:
+        all_responses.sort(
+            key=lambda x: x.get(sort_by, ""),
+            reverse=reverse
+        )
+    except (KeyError, TypeError):
+        # If sort field doesn't exist or can't be compared, skip sorting
+        pass
+
+    # Calculate total
+    total = len(all_responses)
+
+    # Paginate
+    paginated_responses = all_responses[offset:offset + limit]
+
+    # Calculate page number
+    page = (offset // limit) + 1 if limit > 0 else 1
+
+    # Use custom JSON encoding to handle all types
+    from app.core.responses import CustomJSONEncoder
+    from fastapi.responses import JSONResponse
+    import json
+
+    response_data = paginated_response(
+        items=paginated_responses,
+        page=page,
+        limit=limit,
+        total=total,
+        message=f"Found {total} response(s) submitted by you"
+    )
+
+    # Serialize with custom encoder and return as JSONResponse
+    json_str = json.dumps(response_data, cls=CustomJSONEncoder)
+    return JSONResponse(content=json.loads(json_str))
+
+
 @router.get("/{user_id}/permissions", response_model=dict)
 async def get_user_permissions(
     user_id: UUID,

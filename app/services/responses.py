@@ -121,22 +121,22 @@ async def list_responses(
                r.submission_type, r.submitter_ip, r.anonymous_metadata,
                COALESCE(u.username, 'Anonymous') as submitted_by_username
         FROM responses r
-        LEFT JOIN users u ON r.submitted_by = u.id
+        LEFT JOIN users u ON r.submitted_by::text = u.id::text
         WHERE r.deleted = FALSE
     """
     params: list[str] = []
 
     if form_id:
-        query += f" AND r.form_id = ${len(params) + 1}"
+        query += f" AND r.form_id::text = ${len(params) + 1}"
         params.append(str(form_id))
 
     if submitted_by:
-        query += f" AND r.submitted_by = ${len(params) + 1}"
+        query += f" AND r.submitted_by::text = ${len(params) + 1}"
         params.append(str(submitted_by))
 
     if agent_id:
         # For agents, show their own authenticated responses AND anonymous responses from their organization's forms
-        query += f" AND (r.submitted_by = ${len(params) + 1} OR r.submission_type = 'anonymous')"
+        query += f" AND (r.submitted_by::text = ${len(params) + 1} OR r.submission_type = 'anonymous')"
         params.append(str(agent_id))
 
     query += " ORDER BY r.submitted_at DESC"
@@ -145,6 +145,18 @@ async def list_responses(
     output = []
     for result in results:
         result_dict = dict(result)
+
+        # Convert UUID objects to strings for JSON serialization
+        for key in ['id', 'form_id', 'submitted_by']:
+            if key in result_dict and result_dict[key] is not None:
+                result_dict[key] = str(result_dict[key])
+
+        # Convert datetime objects to ISO format strings
+        from datetime import datetime
+        for key in ['submitted_at']:
+            if key in result_dict and result_dict[key] is not None:
+                if isinstance(result_dict[key], datetime):
+                    result_dict[key] = result_dict[key].isoformat()
 
         # Convert IP address objects to strings for JSON serialization
         if result_dict.get("submitter_ip"):
