@@ -22,7 +22,7 @@ async def acquire_lock(
             FROM forms
             WHERE id = $1 AND locked_by IS NOT NULL
             """,
-            form_id,
+            str(form_id),
         )
     except Exception as e:
         return {"lock_acquired": False, "error": f"Database error: {str(e)}"}
@@ -33,14 +33,20 @@ async def acquire_lock(
         if locked_at:
             lock_expires_at = locked_at + timedelta(seconds=timeout_seconds)
             if datetime.now(timezone.utc) < lock_expires_at:
-                # Lock is still active
-                return {
-                    "lock_acquired": False,
-                    "locked_by": existing_lock["locked_by"],
-                    "locked_at": locked_at,
-                    "lock_expires_at": lock_expires_at,
-                    "error": "Form is currently locked by another user",
-                }
+                # Lock is still active - check if it's the same user
+                locked_by_str = str(existing_lock["locked_by"])
+                user_id_str = str(user_id)
+
+                if locked_by_str != user_id_str:
+                    # Different user has the lock
+                    return {
+                        "lock_acquired": False,
+                        "locked_by": existing_lock["locked_by"],
+                        "locked_at": locked_at,
+                        "lock_expires_at": lock_expires_at,
+                        "error": "Form is currently locked by another user",
+                    }
+                # Same user - allow lock renewal (continue to acquire/renew section)
 
     # Acquire or renew lock
     try:
@@ -51,8 +57,8 @@ async def acquire_lock(
             WHERE id = $2
             RETURNING lock_version, locked_at
             """,
-            user_id,
-            form_id,
+            str(user_id),
+            str(form_id),
         )
 
         if result:
@@ -79,8 +85,8 @@ async def release_lock(
             SET locked_by = NULL, locked_at = NULL
             WHERE id = $1 AND locked_by = $2
             """,
-            form_id,
-            user_id,
+            str(form_id),
+            str(user_id),
         )
         return int(result.split()[-1]) > 0
     except Exception:
@@ -96,7 +102,7 @@ async def force_release_lock(conn: asyncpg.Connection, form_id: UUID) -> bool:
             SET locked_by = NULL, locked_at = NULL
             WHERE id = $1
             """,
-            form_id,
+            str(form_id),
         )
         return int(result.split()[-1]) > 0
     except Exception:
@@ -113,10 +119,10 @@ async def get_lock_status(
             SELECT f.locked_by, f.locked_at, f.lock_version,
                    u.username, u.email
             FROM forms f
-            LEFT JOIN users u ON f.locked_by = u.id::text
+            LEFT JOIN users u ON f.locked_by::text = u.id::text
             WHERE f.id = $1
             """,
-            form_id,
+            str(form_id),
         )
 
         if not result:

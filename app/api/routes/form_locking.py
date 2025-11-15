@@ -43,10 +43,16 @@ async def acquire_form_lock(
     - lock_expires_at: When the lock will expire
     - lock_version: Current lock version for optimistic locking
     """
+    # Handle UUID conversion - current_user["id"] might be UUID or string from asyncpg
+    if isinstance(current_user["id"], str):
+        user_id = UUID(current_user["id"])
+    else:
+        user_id = current_user["id"]
+
     result = await acquire_lock(
         conn,
         form_id=form_id,
-        user_id=current_user["id"],
+        user_id=user_id,
         timeout_seconds=request.lock_timeout_seconds,
     )
 
@@ -72,7 +78,13 @@ async def release_form_lock(
     current_user: Annotated[dict[str, Any], Depends(get_current_user)],
 ) -> dict[str, Any]:
     """Release lock on a form."""
-    success = await release_lock(conn, form_id, current_user["id"])
+    # Handle UUID conversion
+    if isinstance(current_user["id"], str):
+        user_id = UUID(current_user["id"])
+    else:
+        user_id = current_user["id"]
+
+    success = await release_lock(conn, form_id, user_id)
 
     if not success:
         raise HTTPException(
