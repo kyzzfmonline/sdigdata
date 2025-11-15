@@ -127,8 +127,17 @@ async def check_lock_status(
     - locked_by: User who holds the lock (if locked)
     - locked_at: When the lock was acquired
     - lock_expires_at: When the lock will expire
+    - can_edit: Whether current user can edit (true if they own the lock)
+    - can_force_unlock: Whether current user can force unlock (admin only)
+    - reason: Optional reason if locked by someone else
     """
-    status_info = await get_lock_status(conn, form_id)
+    # Handle UUID conversion
+    if isinstance(current_user["id"], str):
+        user_id = UUID(current_user["id"])
+    else:
+        user_id = current_user["id"]
+
+    status_info = await get_lock_status(conn, form_id, current_user_id=user_id)
 
     if "error" in status_info:
         raise HTTPException(

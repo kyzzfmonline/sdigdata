@@ -110,9 +110,18 @@ async def force_release_lock(conn: asyncpg.Connection, form_id: UUID) -> bool:
 
 
 async def get_lock_status(
-    conn: asyncpg.Connection, form_id: UUID
+    conn: asyncpg.Connection, form_id: UUID, current_user_id: UUID | None = None
 ) -> dict[str, Any]:
-    """Get the lock status of a form."""
+    """Get the lock status of a form.
+
+    Args:
+        conn: Database connection
+        form_id: UUID of the form
+        current_user_id: UUID of the current authenticated user (optional)
+
+    Returns:
+        Lock status including can_edit and can_force_unlock fields
+    """
     try:
         result = await conn.fetchrow(
             """
@@ -128,21 +137,61 @@ async def get_lock_status(
         if not result:
             return {"error": "Form not found"}
 
-        if result["locked_by"]:
-            # Default timeout is 5 minutes
-            lock_expires_at = result["locked_at"] + timedelta(seconds=300)
+        # No lock exists
+        if not result["locked_by"]:
             return {
-                "is_locked": True,
-                "locked_by": {
-                    "id": result["locked_by"],
-                    "username": result["username"],
-                    "email": result["email"],
-                },
-                "locked_at": result["locked_at"],
-                "lock_expires_at": lock_expires_at,
+                "is_locked": False,
+                "can_edit": True,
+                "can_force_unlock": False,
+                "reason": None,
             }
 
-        return {"is_locked": False}
+        # Lock exists - check if expired
+        locked_at = result["locked_at"]
+        lock_expires_at = locked_at + timedelta(seconds=300)  # 5 min default
+        is_expired = datetime.now(timezone.utc) >= lock_expires_at
+
+        if is_expired:
+            return {
+                "is_locked": False,
+                "can_edit": True,
+                "can_force_unlock": False,
+                "reason": "Previous lock expired",
+            }
+
+        # Lock is active - determine permissions
+        locked_by_str = str(result["locked_by"])
+        current_user_str = str(current_user_id) if current_user_id else None
+        is_owner = current_user_str and (locked_by_str == current_user_str)
+
+        # Check if current user is admin (for force unlock)
+        can_force_unlock = False
+        if current_user_id:
+            from app.services.rbac import get_user_roles
+
+            user_roles = await get_user_roles(conn, current_user_id)
+            role_names = [role["name"].lower() for role in user_roles]
+            can_force_unlock = any(
+                role in ["admin", "super_admin", "super admin", "system_admin"]
+                for role in role_names
+            )
+
+        # Prepare reason message
+        reason = None if is_owner else f"Locked by {result['username']}"
+
+        return {
+            "is_locked": True,
+            "locked_by": {
+                "id": result["locked_by"],
+                "username": result["username"],
+                "email": result["email"],
+            },
+            "locked_at": result["locked_at"],
+            "lock_expires_at": lock_expires_at,
+            "can_edit": is_owner,  # True only if same user owns the lock
+            "can_force_unlock": can_force_unlock,  # True if admin
+            "reason": reason,
+        }
     except Exception as e:
         return {"error": f"Failed to get lock status: {str(e)}"}
 
