@@ -549,7 +549,7 @@ async def get_permissions(
         "data": [
             {
                 "id": "perm_123",
-                "name": "users.create",
+                "name": "users:create",
                 "description": "Create new users",
                 "resource": "users",
                 "action": "create"
@@ -615,7 +615,7 @@ async def get_my_permissions(
         "data": {
             "permissions": [
                 {
-                    "name": "users.create",
+                    "name": "users:create",
                     "resource": "users",
                     "action": "create",
                     "description": "Create new users"
@@ -653,7 +653,7 @@ async def get_user_permissions(
         "success": true,
         "data": [
             {
-                "name": "users.create",
+                "name": "users:create",
                 "resource": "users",
                 "action": "create",
                 "description": "Create new users"

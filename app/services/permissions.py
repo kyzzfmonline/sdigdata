@@ -130,7 +130,7 @@ async def require_permission(
     if not await check_permission(conn, user_id, resource, action):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Insufficient permissions: {resource}.{action} required",
+            detail=f"Insufficient permissions: {resource}:{action} required",
         )
 
 

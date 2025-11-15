@@ -135,7 +135,7 @@ async def require_any_permission_dep(
     """
     checker = PermissionChecker(conn)
     if not await checker.has_any_permission(UUID(current_user["id"]), permissions):
-        perm_list = [f"{r}.{a}" for r, a in permissions]
+        perm_list = [f"{r}:{a}" for r, a in permissions]
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Insufficient permissions: one of {perm_list} required",
