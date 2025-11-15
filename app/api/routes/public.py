@@ -46,7 +46,7 @@ async def get_public_form(
             )
 
         # Check if form is published
-        if form["status"] != "published":
+        if form["status"] != "active":
             logger.warning(
                 f"Public form access failed: form not published - {form_id} "
                 f"(status: {form['status']})"
@@ -166,7 +166,7 @@ async def submit_public_response(
         )
 
     # Check if form is published
-    if form["status"] != "published":
+    if form["status"] != "active":
         logger.warning(
             f"Anonymous submission failed: form not published - {form_id} "
             f"(status: {form['status']})"

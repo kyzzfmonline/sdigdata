@@ -30,7 +30,7 @@ async def get_dashboard_stats(conn: asyncpg.Connection, period: str = "7d") -> d
 
     # Active forms (published)
     active_forms = await conn.fetchval(
-        "SELECT COUNT(*) FROM forms WHERE status = 'published' AND deleted = FALSE"
+        "SELECT COUNT(*) FROM forms WHERE status = 'active' AND deleted = FALSE"
     )
 
     # Total responses

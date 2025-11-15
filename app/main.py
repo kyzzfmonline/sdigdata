@@ -25,6 +25,7 @@ from app.api.routes import (
     users,
 )
 from app.api.routes.conditional_logic import router as conditional_logic_router
+from app.api.routes.form_lifecycle import router as form_lifecycle_router
 from app.api.routes.form_locking import router as form_locking_router
 from app.api.routes.form_templates import router as form_templates_router
 from app.api.routes.form_validation import router as form_validation_router
@@ -293,6 +294,7 @@ v1_router.include_router(auth.router)
 v1_router.include_router(users.router)
 v1_router.include_router(organizations.router)
 v1_router.include_router(forms.router)
+v1_router.include_router(form_lifecycle_router)
 v1_router.include_router(responses.router)
 v1_router.include_router(files.router)
 v1_router.include_router(notifications.router)
@@ -322,6 +324,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(organizations.router)
 app.include_router(forms.router)
+app.include_router(form_lifecycle_router)
 app.include_router(responses.router)
 app.include_router(files.router)
 app.include_router(notifications.router)

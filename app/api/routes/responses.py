@@ -182,8 +182,9 @@ async def submit_response(
     Submit a form response with validation.
 
     **Security & Business Logic**:
-    - Agents can only submit responses to forms they're assigned to
-    - Form must be published (not draft)
+    - Any authenticated user (admin or agent) can submit responses to active forms
+    - Agents are field workers who collect data - assignment is for monitoring, not restriction
+    - Form must be active (not draft or archived)
     - All validation logged for audit
 
     **Request Body:**
@@ -229,30 +230,18 @@ async def submit_response(
         )
 
     # Check if form is published
-    if form["status"] != "published":
+    if form["status"] != "active":
         logger.warning(
-            f"Response submission failed: form not published - {form_id} "
+            f"Response submission failed: form not active - {form_id} "
             f"(status: {form['status']}) by user {current_user['username']}"
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot submit responses to unpublished forms",
+            detail="Cannot submit responses to forms that are not active",
         )
 
-    # If user is an agent, verify they're assigned to this form
-    if current_user["role"] == "agent":
-        assigned_forms = await get_agent_assigned_forms(conn, current_user["id"])
-        assigned_form_ids = [str(f["id"]) for f in assigned_forms]
-
-        if str(form_id) not in assigned_form_ids:
-            logger.warning(
-                f"Response submission failed: agent not assigned - "
-                f"Form: {form_id}, Agent: {current_user['username']}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not assigned to this form",
-            )
+    # Note: Agents CAN fill any active form - they're field workers collecting data
+    # Assignment is for monitoring/management responsibility, not a restriction on data collection
 
     # Create the response
     try:

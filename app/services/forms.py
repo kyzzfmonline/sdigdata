@@ -274,7 +274,7 @@ async def update_form(
     if status is not None:
         updates.append(f"status = ${len(params) + 1}")
         params.append(status)
-        if status == "published":
+        if status == "active":
             updates.append("published_at = CURRENT_TIMESTAMP")
 
     if description is not None:
@@ -317,3 +317,121 @@ async def delete_form(conn: asyncpg.Connection, form_id: UUID) -> bool:
         str(form_id),
     )
     return int(result.split()[-1]) > 0
+
+
+# Form Lifecycle Management Functions
+
+async def publish_form(conn: asyncpg.Connection, form_id: UUID) -> dict | None:
+    """Publish a form (draft → active)."""
+    result = await conn.fetchrow(
+        """
+        UPDATE forms
+        SET status = 'active', published_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND status = 'draft'  AND deleted = FALSE
+        RETURNING id, title, organization_id, schema, status, version, created_by, created_at, published_at, is_public
+        """,
+        str(form_id),
+    )
+    if result:
+        result_dict = dict(result)
+        result_dict["schema"] = (
+            json.loads(result_dict["schema"])
+            if isinstance(result_dict["schema"], str)
+            else result_dict["schema"]
+        )
+        return result_dict
+    return None
+
+
+async def archive_form(
+    conn: asyncpg.Connection, form_id: UUID, reason: str | None = None
+) -> dict | None:
+    """Archive a form (active → archived or draft → archived)."""
+    result = await conn.fetchrow(
+        """
+        UPDATE forms
+        SET status = 'archived', archived_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND status IN ('draft', 'active') AND deleted = FALSE
+        RETURNING id, title, organization_id, schema, status, version, created_by, created_at, archived_at
+        """,
+        str(form_id),
+    )
+    if result:
+        result_dict = dict(result)
+        result_dict["schema"] = (
+            json.loads(result_dict["schema"])
+            if isinstance(result_dict["schema"], str)
+            else result_dict["schema"]
+        )
+        result_dict["archive_reason"] = reason
+        return result_dict
+    return None
+
+
+async def reactivate_form(conn: asyncpg.Connection, form_id: UUID) -> dict | None:
+    """Reactivate an archived form (archived → active)."""
+    result = await conn.fetchrow(
+        """
+        UPDATE forms
+        SET status = 'active', archived_at = NULL, published_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND status = 'archived' AND deleted = FALSE
+        RETURNING id, title, organization_id, schema, status, version, created_by, created_at, published_at
+        """,
+        str(form_id),
+    )
+    if result:
+        result_dict = dict(result)
+        result_dict["schema"] = (
+            json.loads(result_dict["schema"])
+            if isinstance(result_dict["schema"], str)
+            else result_dict["schema"]
+        )
+        return result_dict
+    return None
+
+
+async def decommission_form(
+    conn: asyncpg.Connection, form_id: UUID, user_id: UUID, reason: str
+) -> dict | None:
+    """Decommission a form (archived → decommissioned). This is a final state."""
+    result = await conn.fetchrow(
+        """
+        UPDATE forms
+        SET status = 'decommissioned',
+            decommissioned_at = CURRENT_TIMESTAMP,
+            decommissioned_by = $2,
+            decommission_reason = $3
+        WHERE id = $1 AND status = 'archived' AND deleted = FALSE
+        RETURNING id, title, organization_id, schema, status, version, created_by, created_at,
+                  archived_at, decommissioned_at, decommissioned_by, decommission_reason
+        """,
+        str(form_id),
+        str(user_id),
+        reason,
+    )
+    if result:
+        result_dict = dict(result)
+        result_dict["schema"] = (
+            json.loads(result_dict["schema"])
+            if isinstance(result_dict["schema"], str)
+            else result_dict["schema"]
+        )
+        return result_dict
+    return None
+
+
+async def can_submit_response(conn: asyncpg.Connection, form_id: UUID) -> bool:
+    """Check if a form can accept responses (must be active and public)."""
+    result = await conn.fetchval(
+        """
+        SELECT COUNT(*) FROM forms
+        WHERE id = $1 AND status = 'active' AND is_public = TRUE AND deleted = FALSE
+        """,
+        str(form_id),
+    )
+    return result > 0
+
+
+async def get_form_public_url(form_id: UUID, base_url: str = "") -> str:
+    """Generate public URL for a form."""
+    return f"{base_url}/forms/{form_id}/public"
