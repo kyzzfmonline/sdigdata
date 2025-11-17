@@ -155,7 +155,7 @@ async def list_forms_route(  # type: ignore[misc,no-untyped-def,no-any-unimporte
 
     **Query Parameters:**
     - organization_id: Filter by organization
-    - status: Filter by status ("draft" or "published")
+    - status: Filter by status ("draft", "active", "archived", or "decommissioned")
 
     **Response:**
     ```json
@@ -166,7 +166,7 @@ async def list_forms_route(  # type: ignore[misc,no-untyped-def,no-any-unimporte
             "description": "Annual household survey",
             "organization_id": "...",
             "schema": {...},
-            "status": "published",
+            "status": "active",
             "version": 1,
             "created_by": "...",
             "created_at": "2025-11-03T10:00:00"
@@ -205,7 +205,7 @@ async def get_assigned_forms(  # type: ignore[misc,no-untyped-def,no-any-unimpor
             "title": "Household Survey 2025",
             "organization_id": "...",
             "schema": {...},
-            "status": "published",
+            "status": "active",
             "version": 1,
             "assigned_at": "2025-11-03T10:00:00"
         }
@@ -637,8 +637,8 @@ async def approve_form(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
 
-    # Publish the form (approval = publish)
-    approved_form = await update_form_status(conn, form_id, "published")
+    # Publish the form (approval = publish = active)
+    approved_form = await update_form_status(conn, form_id, "active")
     if not approved_form:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
@@ -647,7 +647,7 @@ async def approve_form(
     return success_response(
         data={
             "form_id": str(form_id),
-            "status": "published",
+            "status": "active",
             "approved_by": current_user["id"],
             "approved_at": "2025-01-01T10:00:00Z",  # Would be current timestamp
             "approval_notes": approval_notes,
@@ -718,9 +718,9 @@ async def publish_form(
     """
     Publish a form (admin only).
 
-    Changes form status from "draft" to "published".
+    Changes form status from "draft" to "active".
     """
-    form = await update_form_status(conn, form_id, "published")
+    form = await update_form_status(conn, form_id, "active")
     if not form:
         not_found_response("Form not found")
     return success_response(data=form)
@@ -819,7 +819,7 @@ async def update_form_route(
         "title": "Updated Form Title",
         "description": "Updated description",
         "form_schema": {...},
-        "status": "published"
+        "status": "active"
     }
     ```
     """
