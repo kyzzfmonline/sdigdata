@@ -29,18 +29,19 @@ def get_s3_client() -> Any:
 
 
 def generate_presigned_url(
-    filename: str, content_type: str, expires_in: int = 3600
+    filename: str, content_type: str, expires_in: int = 3600, read_expires_in: int = 86400
 ) -> dict:
     """
-    Generate a presigned URL for file upload.
+    Generate presigned URLs for file upload and download.
 
     Args:
         filename: Name of the file to upload
         content_type: MIME type of the file
-        expires_in: URL expiration time in seconds (default: 1 hour)
+        expires_in: Upload URL expiration time in seconds (default: 1 hour)
+        read_expires_in: Read URL expiration time in seconds (default: 24 hours)
 
     Returns:
-        Dictionary with 'upload_url' and 'file_url'
+        Dictionary with 'upload_url' and 'file_url' (both presigned)
     """
     from app.core.config import get_settings
 
@@ -64,7 +65,9 @@ def generate_presigned_url(
         config=Config(signature_version="s3v4"),
     )
 
-    # Generate upload URL
+    # Generate upload URL (for PUT requests)
+    # Note: We no longer use ACL=public-read for security
+    # Instead, we generate presigned read URLs
     upload_url = temp_client.generate_presigned_url(
         "put_object",
         Params={
@@ -76,13 +79,17 @@ def generate_presigned_url(
         HttpMethod="PUT",
     )
 
-    # Construct the public file URL
-    if "digitaloceanspaces.com" not in endpoint_for_url:
-        # Local MinIO URL
-        file_url = f"{endpoint_for_url}/{settings.SPACES_BUCKET}/{filename}"
-    else:
-        # DigitalOcean Spaces URL
-        file_url = f"https://{settings.SPACES_BUCKET}.{settings.SPACES_REGION}.digitaloceanspaces.com/{filename}"
+    # Generate read URL (for GET requests) - valid for 24 hours by default
+    # This allows secure, temporary access without making files public
+    file_url = temp_client.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": settings.SPACES_BUCKET,
+            "Key": filename,
+        },
+        ExpiresIn=read_expires_in,
+        HttpMethod="GET",
+    )
 
     return {"upload_url": upload_url, "file_url": file_url}
 

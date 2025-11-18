@@ -33,11 +33,11 @@ def configure_cors():
     settings = get_settings()
     s3_client = get_s3_client()
 
-    # CORS configuration XML
+    # CORS configuration
     # This allows:
     # - Origins: https://sdigdata.com (production) and http://localhost:3000 (development)
     # - Methods: GET (for reading), PUT (for uploading with presigned URLs)
-    # - Headers: * (allows Content-Type and other headers)
+    # - Headers: * (allows Content-Type, x-amz-acl, and other headers)
     # - Exposed Headers: ETag (useful for file integrity checks)
     cors_configuration = {
         'CORSRules': [
@@ -48,7 +48,7 @@ def configure_cors():
                     'http://localhost:3001',
                 ],
                 'AllowedMethods': ['GET', 'PUT', 'HEAD'],
-                'AllowedHeaders': ['*'],
+                'AllowedHeaders': ['*'],  # Must include Content-Type and x-amz-acl
                 'ExposeHeaders': ['ETag', 'Content-Length'],
                 'MaxAgeSeconds': 3600
             }
