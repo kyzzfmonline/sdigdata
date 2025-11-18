@@ -20,7 +20,7 @@ services:
       - 8.8.4.4
     # Override .env values for Docker - use host.docker.internal to access host services
     environment:
-      - DATABASE_URL=postgresql://metroform:password@host.docker.internal:5432/sdigdata
+      - DATABASE_URL=postgresql://sdig_access:ac6cdf37b0ce4ab3@138.68.143.213:3690/sdig_data
       - SPACES_ENDPOINT=http://host.docker.internal:9000
 
   db:

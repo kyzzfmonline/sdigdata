@@ -119,10 +119,13 @@ async def list_responses(
     """List responses with optional filters."""
     query = """
         SELECT r.id, r.form_id, r.submitted_by, r.data, r.attachments, r.submitted_at,
-               r.submission_type, r.submitter_ip, r.anonymous_metadata,
-               COALESCE(u.username, 'Anonymous') as submitted_by_username
+               r.submission_type, r.submitter_ip, r.anonymous_metadata, r.status,
+               COALESCE(u.username, 'Anonymous') as submitted_by_username,
+               f.title as form_title,
+               f.created_at as response_created_at
         FROM responses r
         LEFT JOIN users u ON r.submitted_by::text = u.id::text
+        LEFT JOIN forms f ON r.form_id::text = f.id::text
         WHERE r.deleted = FALSE
     """
     params: list[str] = []
@@ -154,10 +157,14 @@ async def list_responses(
 
         # Convert datetime objects to ISO format strings
         from datetime import datetime
-        for key in ['submitted_at']:
+        for key in ['submitted_at', 'response_created_at']:
             if key in result_dict and result_dict[key] is not None:
                 if isinstance(result_dict[key], datetime):
                     result_dict[key] = result_dict[key].isoformat()
+
+        # Rename response_created_at to created_at for API response
+        if 'response_created_at' in result_dict:
+            result_dict['created_at'] = result_dict.pop('response_created_at')
 
         # Convert IP address objects to strings for JSON serialization
         if result_dict.get("submitter_ip"):
