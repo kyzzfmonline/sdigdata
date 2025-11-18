@@ -29,9 +29,9 @@ async def create_response(
 
     result = await conn.fetchrow(
         """
-        INSERT INTO responses (form_id, organization_id, submitted_by, data, attachments, submission_type, submitter_ip, user_agent, anonymous_metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id, form_id, organization_id, submitted_by, data, attachments, submitted_at, submission_type, submitter_ip, user_agent, anonymous_metadata
+        INSERT INTO responses (form_id, organization_id, submitted_by, data, attachments, submission_type, submitter_ip, user_agent, anonymous_metadata, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, form_id, organization_id, submitted_by, data, attachments, submitted_at, submission_type, submitter_ip, user_agent, anonymous_metadata, status
         """,
         str(form_id),
         str(form["organization_id"]),
@@ -42,6 +42,7 @@ async def create_response(
         submitter_ip,
         user_agent,
         json.dumps(anonymous_metadata) if anonymous_metadata else None,
+        'submitted',
     )
     if result:
         result_dict = dict(result)

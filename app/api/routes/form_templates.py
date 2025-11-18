@@ -263,3 +263,74 @@ async def use_template(
         },
         message="Form created from template successfully",
     )
+
+
+class SaveAsTemplateRequest(BaseModel):
+    """Request to save a form as a template."""
+
+    name: str
+    description: str | None = None
+    category: str
+    is_public: bool = False
+    tags: list[str] | None = None
+    thumbnail_url: str | None = None
+
+
+@router.post("/from-form/{form_id}", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def save_form_as_template(
+    form_id: UUID,
+    request: SaveAsTemplateRequest,
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
+) -> dict[str, Any]:
+    """
+    Save an existing form as a reusable template.
+
+    This allows users to convert their forms into templates that can be
+    reused for creating new forms with the same structure.
+    """
+    from app.services.forms import get_form_by_id
+
+    # Get the form
+    form = await get_form_by_id(conn, form_id)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Form not found",
+        )
+
+    # Check if user has access to the form
+    # (either owns it or is in the same organization)
+    if (
+        form["created_by"] != UUID(current_user["id"])
+        and form["organization_id"] != UUID(current_user["organization_id"])
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to save this form as a template",
+        )
+
+    # Create template from form schema
+    template = await create_template(
+        conn,
+        name=request.name,
+        category=request.category,
+        form_schema=form["form_schema"],
+        created_by=current_user["id"],
+        description=request.description or form.get("description"),
+        thumbnail_url=request.thumbnail_url,
+        is_public=request.is_public,
+        organization_id=current_user["organization_id"],
+        tags=request.tags,
+    )
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save form as template",
+        )
+
+    return success_response(
+        data=template,
+        message=f"Form saved as template '{request.name}' successfully",
+    )
