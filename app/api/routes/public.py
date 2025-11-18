@@ -210,9 +210,13 @@ async def submit_public_response(
 
         # Calculate and store ML quality scores (if available)
         try:
+            # response["id"] is already a UUID from asyncpg, no need to wrap it
+            response_uuid = response["id"] if isinstance(response["id"], UUID) else UUID(response["id"])
+
             quality_scores = await calculate_and_store_quality(
                 conn,
-                response_id=UUID(response["id"]),
+                response_id=response_uuid,
+                form_id=form_id,
                 response_data=request.data,
                 attachments=request.attachments,
                 form_schema=form.get("schema", {}),

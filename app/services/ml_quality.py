@@ -326,6 +326,7 @@ def calculate_overall_quality(
 async def calculate_and_store_quality(
     conn: asyncpg.Connection,
     response_id: UUID,
+    form_id: UUID,
     response_data: dict,
     attachments: dict[str, Any] | None,
     form_schema: dict,
@@ -337,6 +338,7 @@ async def calculate_and_store_quality(
     Args:
         conn: Database connection
         response_id: Response ID
+        form_id: Form ID
         response_data: Response data dictionary
         attachments: Attachments dictionary
         form_schema: Form schema
@@ -358,7 +360,7 @@ async def calculate_and_store_quality(
     )
 
     # Detect anomalies
-    is_anomaly, anomaly_reason = await detect_anomaly(response_data, response_id, conn)
+    is_anomaly, anomaly_reason = await detect_anomaly(response_data, form_id, conn)
 
     # Determine if suitable for training
     suitable_for_training = overall >= 0.6 and not is_anomaly and completeness >= 0.8
