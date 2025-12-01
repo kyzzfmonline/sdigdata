@@ -177,3 +177,39 @@ async def require_system_admin(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
 ):
     return await require_permission_dep("system", "admin", current_user, conn)
+
+
+# Election permission dependencies
+async def require_elections_read(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+) -> Any:
+    return await require_permission_dep("elections", "read", current_user, conn)
+
+
+async def require_elections_create(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+) -> Any:
+    return await require_permission_dep("elections", "create", current_user, conn)
+
+
+async def require_elections_manage(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+) -> Any:
+    return await require_permission_dep("elections", "manage", current_user, conn)
+
+
+async def require_voting(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+) -> Any:
+    return await require_permission_dep("voting", "vote", current_user, conn)
+
+
+async def require_election_analytics(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+) -> Any:
+    return await require_permission_dep("election_analytics", "view", current_user, conn)

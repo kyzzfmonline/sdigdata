@@ -18,10 +18,10 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
-    # Override .env values for Docker - use host.docker.internal to access host services
+    # Override .env values for Docker - use db container for local development
     environment:
-      - DATABASE_URL=postgresql://sdig_access:ac6cdf37b0ce4ab3@138.68.143.213:3690/sdig_data
-      - SPACES_ENDPOINT=http://host.docker.internal:9000
+      - DATABASE_URL=postgresql://metroform:password@db:5432/sdigdata
+      - SPACES_ENDPOINT=http://minio:9000
 
   db:
     build:

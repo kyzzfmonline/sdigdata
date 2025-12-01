@@ -7,6 +7,18 @@ from uuid import UUID
 import asyncpg
 
 
+def _parse_user_row(row: asyncpg.Record | None) -> dict[str, Any] | None:
+    """Parse a user row into a dict with UUID fields as strings."""
+    if not row:
+        return None
+    result = dict(row)
+    # Convert UUID fields to strings for JSON serialization
+    for field in ("id", "organization_id", "user_id"):
+        if result.get(field) is not None:
+            result[field] = str(result[field])
+    return result
+
+
 async def create_user(  # type: ignore[no-any-unimported]
     conn: asyncpg.Connection,
     username: str,
@@ -26,7 +38,7 @@ async def create_user(  # type: ignore[no-any-unimported]
         role,
         str(organization_id),
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def get_user_by_id(  # type: ignore[no-any-unimported]
@@ -41,7 +53,7 @@ async def get_user_by_id(  # type: ignore[no-any-unimported]
         """,
         str(user_id),
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def get_user_by_username(  # type: ignore[no-any-unimported]
@@ -56,7 +68,7 @@ async def get_user_by_username(  # type: ignore[no-any-unimported]
         """,
         username,
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def list_users(  # type: ignore[no-any-unimported]
@@ -134,7 +146,7 @@ async def list_users(  # type: ignore[no-any-unimported]
         count_query, *params[:-2]
     )  # Remove limit/offset params
 
-    return [dict(row) for row in rows], int(total_count or 0)
+    return [_parse_user_row(row) for row in rows], int(total_count or 0)
 
 
 async def delete_user(conn: asyncpg.Connection, user_id: UUID) -> bool:  # type: ignore[no-any-unimported]
@@ -203,7 +215,7 @@ async def update_user(  # type: ignore[no-any-unimported]
     """
 
     result = await conn.fetchrow(query, *params)
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def update_user_password(  # type: ignore[no-any-unimported]
@@ -238,7 +250,7 @@ async def get_user_preferences(  # type: ignore[no-any-unimported]
         """,
         str(user_id),
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def update_notification_preferences(  # type: ignore[no-any-unimported]
@@ -341,7 +353,7 @@ async def get_user_by_email(  # type: ignore[no-any-unimported]
         """,
         email,
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def create_password_reset_token(  # type: ignore[no-any-unimported]
@@ -374,7 +386,7 @@ async def create_password_reset_token(  # type: ignore[no-any-unimported]
         token_hash,
         expires_at,
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def get_password_reset_token(  # type: ignore[no-any-unimported]
@@ -390,7 +402,7 @@ async def get_password_reset_token(  # type: ignore[no-any-unimported]
         """,
         token_hash,
     )
-    return dict(result) if result else None
+    return _parse_user_row(result)
 
 
 async def mark_token_used(  # type: ignore[no-any-unimported]

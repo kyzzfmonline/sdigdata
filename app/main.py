@@ -25,6 +25,8 @@ from app.api.routes import (
     users,
 )
 from app.api.routes.conditional_logic import router as conditional_logic_router
+from app.api.routes.election_analytics import router as election_analytics_router
+from app.api.routes.elections import router as elections_router
 from app.api.routes.form_lifecycle import router as form_lifecycle_router
 from app.api.routes.form_locking import router as form_locking_router
 from app.api.routes.form_templates import router as form_templates_router
@@ -33,8 +35,12 @@ from app.api.routes.form_versioning import router as form_versioning_router
 from app.api.routes.metrics import router as metrics_router
 from app.api.routes.permission_groups import router as permission_groups_router
 from app.api.routes.public import router as public_router
+from app.api.routes.public_elections import router as public_elections_router
 from app.api.routes.rbac import router as rbac_router
 from app.api.routes.search import router as search_router
+from app.api.routes.voting import router as voting_router
+from app.api.routes.candidate_profiles import router as candidate_profiles_router
+from app.api.routes.political_parties import router as political_parties_router
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.logging_config import get_logger, setup_logging
@@ -316,6 +322,14 @@ v1_router.include_router(permission_groups_router)
 if public_router:
     v1_router.include_router(public_router)
 
+# Elections & Voting routers (analytics must be first for /dashboard to work)
+v1_router.include_router(election_analytics_router)
+v1_router.include_router(elections_router)
+v1_router.include_router(voting_router)
+v1_router.include_router(public_elections_router)
+v1_router.include_router(candidate_profiles_router)
+v1_router.include_router(political_parties_router)
+
 # Include versioned router
 app.include_router(v1_router)
 
@@ -345,6 +359,14 @@ app.include_router(security_settings.router)
 app.include_router(permission_groups_router)
 if public_router:
     app.include_router(public_router)
+
+# Elections & Voting routers (root level, analytics must be first for /dashboard to work)
+app.include_router(election_analytics_router)
+app.include_router(elections_router)
+app.include_router(voting_router)
+app.include_router(public_elections_router)
+app.include_router(candidate_profiles_router)
+app.include_router(political_parties_router)
 
 
 @app.get("/health")
