@@ -15,7 +15,7 @@ from app.services import voting as voting_service
 from app.services import voter_verification as verification_service
 from app.services import candidate_profiles as candidate_profiles_service
 
-router = APIRouter(prefix="/public/elections", tags=["Public Elections"])
+router = APIRouter(prefix="/vote", tags=["Public Voting"])
 
 
 # ============================================

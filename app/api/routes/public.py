@@ -17,7 +17,7 @@ from app.services.forms import get_form_by_id
 from app.services.ml_quality import calculate_and_store_quality
 from app.services.responses import create_response
 
-router = APIRouter(prefix="/public", tags=["Public"])
+router = APIRouter(prefix="/form", tags=["Public Forms"])
 logger = get_logger(__name__)
 
 
@@ -28,7 +28,7 @@ class PublicResponseCreate(BaseModel):
     attachments: dict | None = None
 
 
-@router.get("/forms/{form_id}")
+@router.get("/{form_id}")
 async def get_public_form(
     form_id: UUID,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
@@ -79,7 +79,7 @@ async def get_public_form(
         )
 
 
-@router.post("/forms/{form_id}/responses")
+@router.post("/{form_id}/responses")
 async def submit_public_response(
     form_id: UUID,
     request: PublicResponseCreate,
