@@ -13,6 +13,7 @@ from app.services import elections as election_service
 from app.services import election_analytics as analytics_service
 from app.services import voting as voting_service
 from app.services import voter_verification as verification_service
+from app.services import candidate_profiles as candidate_profiles_service
 
 router = APIRouter(prefix="/public/elections", tags=["Public Elections"])
 
@@ -84,10 +85,33 @@ async def get_public_election(
 
     # Get positions and candidates
     positions = await election_service.list_positions(conn, election_id)
+
+    # Get candidates from the new profile-based system
+    profile_candidates = await candidate_profiles_service.get_election_candidates(
+        conn, election_id
+    )
+
     for position in positions:
-        candidates = await election_service.list_candidates(conn, UUID(position["id"]))
-        # Remove sensitive fields from public view
-        position["candidates"] = [
+        position_id = UUID(position["id"])
+
+        # First, get profile-based candidates for this position
+        profile_based = [
+            {
+                "id": c["id"],  # This is the election_candidate ID
+                "candidate_profile_id": c["candidate_profile_id"],
+                "name": c.get("display_name") or c.get("profile_name"),
+                "photo_url": c.get("campaign_photo_url") or c.get("profile_photo"),
+                "party": c.get("party"),
+                "bio": c.get("bio"),
+                "manifesto": c.get("campaign_manifesto") or c.get("profile_manifesto"),
+            }
+            for c in profile_candidates
+            if c.get("position_id") == str(position_id)
+        ]
+
+        # Then get legacy candidates (from candidates table)
+        legacy_candidates = await election_service.list_candidates(conn, position_id)
+        legacy_based = [
             {
                 "id": c["id"],
                 "name": c["name"],
@@ -96,8 +120,11 @@ async def get_public_election(
                 "bio": c["bio"],
                 "manifesto": c["manifesto"],
             }
-            for c in candidates
+            for c in legacy_candidates
         ]
+
+        # Combine both - profile-based first, then legacy
+        position["candidates"] = profile_based + legacy_based
 
     # Get poll options
     poll_options = await election_service.list_poll_options(conn, election_id)

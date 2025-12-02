@@ -32,16 +32,16 @@ def generate_presigned_url(
     filename: str, content_type: str, expires_in: int = 3600, read_expires_in: int = 86400
 ) -> dict:
     """
-    Generate presigned URLs for file upload and download.
+    Generate presigned URL for file upload and direct URL for file access.
 
     Args:
         filename: Name of the file to upload
         content_type: MIME type of the file
         expires_in: Upload URL expiration time in seconds (default: 1 hour)
-        read_expires_in: Read URL expiration time in seconds (default: 24 hours)
+        read_expires_in: Not used - keeping for backwards compatibility
 
     Returns:
-        Dictionary with 'upload_url' and 'file_url' (both presigned)
+        Dictionary with 'upload_url' (presigned) and 'file_url' (direct public URL)
     """
     from app.core.config import get_settings
 
@@ -66,8 +66,6 @@ def generate_presigned_url(
     )
 
     # Generate upload URL (for PUT requests)
-    # Note: We no longer use ACL=public-read for security
-    # Instead, we generate presigned read URLs
     upload_url = temp_client.generate_presigned_url(
         "put_object",
         Params={
@@ -79,17 +77,10 @@ def generate_presigned_url(
         HttpMethod="PUT",
     )
 
-    # Generate read URL (for GET requests) - valid for 24 hours by default
-    # This allows secure, temporary access without making files public
-    file_url = temp_client.generate_presigned_url(
-        "get_object",
-        Params={
-            "Bucket": settings.SPACES_BUCKET,
-            "Key": filename,
-        },
-        ExpiresIn=read_expires_in,
-        HttpMethod="GET",
-    )
+    # Generate direct public URL for file access (no signature, no expiration)
+    # The bucket has a public read policy, so files can be accessed directly
+    # This ensures images remain accessible permanently
+    file_url = f"{endpoint_for_url}/{current_settings.SPACES_BUCKET}/{filename}"
 
     return {"upload_url": upload_url, "file_url": file_url}
 
