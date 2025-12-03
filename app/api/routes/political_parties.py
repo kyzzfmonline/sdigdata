@@ -247,6 +247,69 @@ async def delete_party(
     return success_response(message="Political party dissolved")
 
 
+@router.get("/deleted/list")
+async def list_deleted_parties(
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """
+    List all soft-deleted (dissolved) political parties.
+
+    These parties can be permanently deleted using the hard delete endpoint.
+    """
+    await require_permission(conn, UUID(current_user["id"]), "elections", "delete")
+
+    parties, total = await party_service.list_deleted_parties(
+        conn=conn,
+        organization_id=UUID(current_user["organization_id"]),
+        limit=limit,
+        offset=offset,
+    )
+
+    return success_response(
+        data={
+            "parties": parties,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+    )
+
+
+@router.delete("/{party_id}/permanent")
+async def hard_delete_party(
+    party_id: UUID,
+    conn: Annotated[asyncpg.Connection, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Permanently delete a soft-deleted political party.
+
+    WARNING: This action is irreversible and will remove all data associated
+    with this party. Only parties that have already been soft-deleted (dissolved)
+    can be permanently deleted.
+
+    Use this when you need to re-create a party with the same name.
+    """
+    await require_permission(conn, UUID(current_user["id"]), "elections", "delete")
+
+    success = await party_service.hard_delete_party(
+        conn=conn,
+        party_id=party_id,
+        organization_id=UUID(current_user["organization_id"]),
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Political party not found or not in deleted state. Only dissolved parties can be permanently deleted.",
+        )
+
+    return success_response(message="Political party permanently deleted")
+
+
 # ============================================
 # PARTY STATS & CANDIDATES
 # ============================================

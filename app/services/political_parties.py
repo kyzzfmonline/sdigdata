@@ -240,6 +240,55 @@ async def delete_party(
     return int(result.split()[-1]) > 0
 
 
+async def hard_delete_party(
+    conn: asyncpg.Connection,
+    party_id: UUID,
+    organization_id: UUID,
+) -> bool:
+    """
+    Permanently delete a political party from the database.
+
+    This should only be used for parties that have been soft-deleted
+    and need to be completely removed (e.g., to allow re-creating with same name).
+
+    WARNING: This is irreversible and removes all historical data.
+    """
+    # Only allow hard delete of already soft-deleted parties
+    result = await conn.execute(
+        """
+        DELETE FROM political_parties
+        WHERE id = $1 AND organization_id = $2 AND deleted = TRUE
+        """,
+        str(party_id),
+        str(organization_id),
+    )
+    return int(result.split()[-1]) > 0
+
+
+async def list_deleted_parties(
+    conn: asyncpg.Connection,
+    organization_id: UUID,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
+    """List soft-deleted political parties."""
+    query = """
+        SELECT * FROM political_parties
+        WHERE organization_id = $1 AND deleted = TRUE
+        ORDER BY deleted_at DESC
+        LIMIT $2 OFFSET $3
+    """
+    count_query = """
+        SELECT COUNT(*) FROM political_parties
+        WHERE organization_id = $1 AND deleted = TRUE
+    """
+
+    total = await conn.fetchval(count_query, str(organization_id))
+    rows = await conn.fetch(query, str(organization_id), limit, offset)
+
+    return [_parse_party_row(row) for row in rows], total or 0
+
+
 # ============================================
 # PARTY STATS & ANALYTICS
 # ============================================

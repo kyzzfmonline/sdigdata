@@ -4,12 +4,12 @@ import asyncio
 import sys
 
 import asyncpg
-from argon2 import PasswordHasher
 
 # Add parent directory to path
 sys.path.insert(0, "/root/workspace/sdigdata")
 
 from app.core.config import get_settings
+from app.core.security import hash_password
 
 
 async def seed_admin_permissions():
@@ -34,20 +34,26 @@ async def seed_admin_permissions():
 
     print(f"\n✓ Organization ID: {org_id}")
 
-    # 2. Create admin user if not exists
-    ph = PasswordHasher()
-    password_hash = ph.hash("admin123")
-
+    # 2. Get or create admin user (DO NOT overwrite existing password)
     admin_id = await conn.fetchval("""
-        INSERT INTO users (username, password_hash, role, organization_id, email)
-        VALUES ('admin', $1, 'admin', $2, 'admin@metroform.local')
-        ON CONFLICT (username) DO UPDATE
-        SET password_hash = EXCLUDED.password_hash
-        RETURNING id
-    """, password_hash, str(org_id))
+        SELECT id FROM users WHERE username = 'admin'
+    """)
 
-    print(f"✓ Admin user ID: {admin_id}")
-    print(f"✓ Admin credentials: username='admin', password='admin123'")
+    if not admin_id:
+        # Only create admin with default password if it doesn't exist
+        # Use the app's hash_password function for consistent hashing
+        password_hash = hash_password("admin123")
+
+        admin_id = await conn.fetchval("""
+            INSERT INTO users (username, password_hash, role, organization_id, email)
+            VALUES ('admin', $1, 'admin', $2, 'admin@metroform.local')
+            RETURNING id
+        """, password_hash, str(org_id))
+        print(f"✓ Created admin user ID: {admin_id}")
+        print(f"✓ Admin credentials: username='admin', password='admin123'")
+    else:
+        print(f"✓ Admin user already exists: {admin_id}")
+        print(f"✓ Existing password preserved (not overwritten)")
 
     # 3. Get or create admin role
     admin_role_id = await conn.fetchval("""
@@ -126,6 +132,24 @@ async def seed_admin_permissions():
         # Reputation permissions (2)
         ('reputation:view', 'reputation', 'view', 'View user reputation and leaderboards'),
         ('reputation:manage', 'reputation', 'manage', 'Manage user reputation scores'),
+
+        # Elections permissions (6)
+        ('elections:create', 'elections', 'create', 'Create new elections'),
+        ('elections:read', 'elections', 'read', 'View elections'),
+        ('elections:update', 'elections', 'update', 'Update elections'),
+        ('elections:delete', 'elections', 'delete', 'Delete elections'),
+        ('elections:manage', 'elections', 'manage', 'Manage election settings'),
+        ('elections:publish', 'elections', 'publish', 'Publish elections'),
+
+        # Collation permissions (8)
+        ('collation:read', 'collation', 'read', 'View collation data and dashboards'),
+        ('collation:create', 'collation', 'create', 'Create result sheets and incidents'),
+        ('collation:update', 'collation', 'update', 'Update collation data'),
+        ('collation:delete', 'collation', 'delete', 'Delete collation data'),
+        ('collation:verify', 'collation', 'verify', 'Verify result sheets'),
+        ('collation:approve', 'collation', 'approve', 'Approve verified result sheets'),
+        ('collation:manage', 'collation', 'manage', 'Manage collation settings and officers'),
+        ('collation:assign', 'collation', 'assign', 'Assign officers to polling stations'),
     ]
 
     # 5. Create any minimum required permissions that don't exist
