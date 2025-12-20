@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
 
+    # OpenAI Configuration (for AI-powered question refinement)
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4o"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

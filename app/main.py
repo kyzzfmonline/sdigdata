@@ -43,6 +43,7 @@ from app.api.routes.candidate_profiles import router as candidate_profiles_route
 from app.api.routes.political_parties import router as political_parties_router
 from app.api.routes.geographic import router as geographic_router
 from app.api.routes.collation import router as collation_router
+from app.api.routes.question_import import router as question_import_router
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.logging_config import get_logger, setup_logging
@@ -333,6 +334,7 @@ v1_router.include_router(candidate_profiles_router)
 v1_router.include_router(political_parties_router)
 v1_router.include_router(geographic_router)
 v1_router.include_router(collation_router)
+v1_router.include_router(question_import_router)
 
 # Include versioned router
 app.include_router(v1_router)
@@ -373,6 +375,7 @@ app.include_router(candidate_profiles_router)
 app.include_router(political_parties_router)
 app.include_router(geographic_router)
 app.include_router(collation_router)
+app.include_router(question_import_router)
 
 
 @app.get("/health")
