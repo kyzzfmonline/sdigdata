@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     SPACES_SECRET: str
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://admin.sdigdata.com,https://sdigdata.com,http://sdigdata.com"
 
     # Email/SMTP Configuration
     SMTP_SERVER: str = "smtp.gmail.com"
