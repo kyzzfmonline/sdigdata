@@ -17,15 +17,6 @@ from app.core.security import hash_password
 
 # All permissions that the frontend expects (colon notation)
 ALL_PERMISSIONS = [
-    # Generic resource-level permissions (for broad access checks)
-    ('analytics', 'analytics', 'full', 'Full analytics access'),
-    ('forms', 'forms', 'full', 'Full forms access'),
-    ('responses', 'responses', 'full', 'Full responses access'),
-    ('permissions', 'permissions', 'full', 'Full permissions access'),
-    ('roles', 'roles', 'full', 'Full roles access'),
-    ('system', 'system', 'full', 'Full system access'),
-    ('users', 'users', 'full', 'Full users access'),
-
     # Forms permissions
     ('forms:create', 'forms', 'create', 'Create new forms'),
     ('forms:read', 'forms', 'read', 'View forms'),
